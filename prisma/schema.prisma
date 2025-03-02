@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model MC {
+  id            Int       @id @default(autoincrement())
+  name          String    @unique
+  affiliation   String?
+  description   String?
+  hood          String?
+  image         String?
+  likesCount    Int       @default(0)
+  commentsCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  likes         Like[]
+  comments      MCComment[]
+  ranking       MCRank?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  isAdmin       Boolean   @default(false)
+  accounts      Account[]
+  sessions      Session[]
+  likes         Like[]
+  mcComments    MCComment[]
+  rankComments  RankComment[]
+  votes         Vote[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Video {
+  id          String   @id
+  title       String
+  thumbnail   String
+  publishedAt DateTime
+  channelId   String
+  channelTitle String
+  viewCount   Int
+}
+
+model video_sengoku {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+}
+
+model video_umb {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+}
+
+model video_kok {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+}
+
+model video_ng {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+}
+
+model video_gaisen {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+}
+
+model video_adrenaline {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+}
+
+model video_fsl {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+}
+
+model video_batou {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+}
+
+model video_kuchigenka {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+}
+
+model video_battlesummit {
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
+  channelTitle String
+  viewCount    Int
+  duration     String
+  sourceChannel String
+}
+
+model Like {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  mc        MC       @relation(fields: [mcId], references: [id])
+  mcId      Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, mcId])
+}
+
+model MCComment {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  userId    String
+  mcId      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  mc        MC       @relation(fields: [mcId], references: [id])
+  parentId  Int?     // 親コメントのID
+  parent    MCComment?  @relation("MCCommentReplies", fields: [parentId], references: [id])
+  replies   MCComment[] @relation("MCCommentReplies")
+
+  @@map("comments_mc")
+}
+
+model RankComment {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  userId    String
+  mcRankId  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  mcRank    MCRank   @relation(fields: [mcRankId], references: [id])
+  parentId  Int?     // 親コメントのID
+  parent    RankComment?  @relation("RankCommentReplies", fields: [parentId], references: [id])
+  replies   RankComment[] @relation("RankCommentReplies")
+
+  @@map("comments_rank")
+}
+
+model MCRank {
+  id                 Int       @id @default(autoincrement())
+  name               String    @unique
+  mc                 MC        @relation(fields: [mcId], references: [id])
+  mcId               Int       @unique
+  totalScore         Float     @default(0) @map("total_score")
+  rhymeScore         Float     @default(0) @map("rhyme_score")
+  vibesScore         Float     @default(0) @map("vibes_score")
+  flowScore          Float     @default(0) @map("flow_score")
+  dialogueScore      Float     @default(0) @map("dialogue_score")
+  musicalityScore    Float     @default(0) @map("musicality_score")
+  rawTotalScore      Float     @default(0) @map("raw_total_score")
+  rawRhymeScore      Float     @default(0) @map("raw_rhyme_score")
+  rawVibesScore      Float     @default(0) @map("raw_vibes_score")
+  rawFlowScore       Float     @default(0) @map("raw_flow_score")
+  rawDialogueScore   Float     @default(0) @map("raw_dialogue_score")
+  rawMusicalityScore Float     @default(0) @map("raw_musicality_score")
+  voteCount          Int       @default(0) @map("vote_count")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  votes              Vote[]
+  comments           RankComment[]
+
+  @@map("mc_rank")
+}
+
+model Vote {
+  id          Int      @id @default(autoincrement())
+  mcId        Int      @map("mc_id")
+  userId      String   @map("user_id")
+  rhyme       Int
+  vibes       Int
+  flow        Int
+  dialogue    Int
+  musicality  Int
+  createdAt   DateTime @default(now()) @map("created_at")
+  mc          MCRank   @relation(fields: [mcId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([mcId, userId])
+  @@map("votes")
+}
