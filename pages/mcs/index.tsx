@@ -404,7 +404,7 @@ export default function MCList({ mcs: initialMcs }: Props) {
   const [sortType, setSortType] = useState<SortType>("name");
   const [mcs, setMcs] = useState(initialMcs);
   const [expandedComments, setExpandedComments] = useState<number[]>([]);
-  const { data: sessionData } = useSession();
+  const { data: session } = useSession();
   const [isAdmin, setIsAdmin] = useState(false);
 
   // ソートされたMCsを取得
@@ -413,10 +413,10 @@ export default function MCList({ mcs: initialMcs }: Props) {
   // 管理者権限チェック
   useEffect(() => {
     const checkAdminStatus = async () => {
-      if (sessionData?.user?.email) {
+      if (session?.user?.email) {
         try {
           const response = await fetch(
-            `/api/user/check-admin?email=${sessionData.user.email}`
+            `/api/user/check-admin?email=${session.user.email}`
           );
           const data = await response.json();
           setIsAdmin(data.isAdmin);
@@ -426,7 +426,7 @@ export default function MCList({ mcs: initialMcs }: Props) {
       }
     };
     checkAdminStatus();
-  }, [sessionData]);
+  }, [session]);
 
   // リセット処理関数を修正
   const handleReset = async () => {
@@ -472,19 +472,128 @@ export default function MCList({ mcs: initialMcs }: Props) {
     }
   };
 
-  if (!sessionData) {
+  if (!session) {
     return <p>コメントするにはログインしてください</p>;
   }
 
-  const handleLike = async (mcId: number) => {
+  // コメントの編集処理
+  const handleEditComment = async (commentId: number, content: string) => {
     try {
-      const session = await getSession();
-      if (!session) {
-        toast.error("いいねするにはログインが必要です");
-        return;
+      const response = await fetch(`/api/mc/comment/${commentId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!response.ok) {
+        throw new Error("コメントの更新に失敗しました");
       }
 
-      const response = await fetch("/api/mcs/like", {
+      const updatedComment = await response.json();
+
+      // MCsの状態を更新
+      setMcs((prevMcs) =>
+        prevMcs.map((mc) => ({
+          ...mc,
+          comments: mc.comments.map((comment) =>
+            comment.id === commentId
+              ? {
+                  ...comment,
+                  content: updatedComment.content,
+                  updatedAt: updatedComment.updatedAt,
+                }
+              : comment
+          ),
+        }))
+      );
+
+      toast.success("コメントを更新しました");
+    } catch (error) {
+      console.error("Error updating comment:", error);
+      toast.error("コメントの更新に失敗しました");
+    }
+  };
+
+  // コメントの削除処理
+  const handleDeleteComment = async (commentId: number) => {
+    try {
+      const response = await fetch(`/api/mc/comment/${commentId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("コメントの削除に失敗しました");
+      }
+
+      // MCsの状態を更新
+      setMcs((prevMcs) =>
+        prevMcs.map((mc) => ({
+          ...mc,
+          comments: mc.comments.filter((comment) => comment.id !== commentId),
+        }))
+      );
+
+      toast.success("コメントを削除しました");
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      toast.error("コメントの削除に失敗しました");
+    }
+  };
+
+  // コメントの返信処理
+  const handleReply = async (
+    commentId: number,
+    content: string,
+    replyToUser?: string
+  ) => {
+    try {
+      const response = await fetch(`/api/mcs/comment/${commentId}/reply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content, replyToUser }),
+      });
+
+      if (!response.ok) {
+        throw new Error("返信の投稿に失敗しました");
+      }
+
+      const newReply = await response.json();
+
+      // MCsの状態を更新
+      setMcs((prevMcs) =>
+        prevMcs.map((mc) => ({
+          ...mc,
+          comments: mc.comments.map((comment) =>
+            comment.id === commentId
+              ? {
+                  ...comment,
+                  replies: [...(comment.replies || []), newReply],
+                }
+              : comment
+          ),
+        }))
+      );
+
+      toast.success("返信を投稿しました");
+    } catch (error) {
+      console.error("Error posting reply:", error);
+      toast.error("返信の投稿に失敗しました");
+    }
+  };
+
+  // いいね処理
+  const handleLike = async (mcId: number) => {
+    if (!session) {
+      toast.error("いいねするにはログインが必要です");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/mc/like`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -493,21 +602,18 @@ export default function MCList({ mcs: initialMcs }: Props) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `Failed to like: ${response.statusText}`
-        );
+        const error = await response.json();
+        throw new Error(error.error || "いいねの処理に失敗しました");
       }
 
       const data = await response.json();
-
       setMcs((prevMcs) =>
         prevMcs.map((mc) =>
           mc.id === mcId
             ? {
                 ...mc,
-                likesCount: data.likesCount,
                 isLikedByUser: data.liked,
+                likesCount: data.likesCount,
               }
             : mc
         )
@@ -515,30 +621,26 @@ export default function MCList({ mcs: initialMcs }: Props) {
 
       toast.success(data.message);
     } catch (error) {
-      console.error("Like error:", error);
+      console.error("Error liking MC:", error);
       toast.error(
         error instanceof Error ? error.message : "いいねの処理に失敗しました"
       );
     }
   };
 
-  // コメントの表示/非表示を切り替える関数
-  const toggleComments = (mcId: number) => {
-    setExpandedComments((prev) =>
-      prev.includes(mcId) ? prev.filter((id) => id !== mcId) : [...prev, mcId]
-    );
-  };
-
-  // コメント投稿のハンドラーを修正
+  // コメントの投稿処理
   const handleComment = async (mcId: number, content: string) => {
-    if (!sessionData || !content.trim()) {
-      return;
+    if (!session) {
+      toast.error("コメントするにはログインが必要です");
+      return null;
     }
 
     try {
-      const response = await fetch("/api/mc/comment", {
+      const response = await fetch("/api/mcs/comment", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ mcId, content }),
       });
 
@@ -556,168 +658,51 @@ export default function MCList({ mcs: initialMcs }: Props) {
                 ...mc,
                 comments: [
                   {
-                    id: newComment.id,
-                    content: newComment.content,
-                    createdAt: newComment.createdAt,
-                    updatedAt: newComment.updatedAt,
-                    userId: newComment.userId,
-                    mcId: newComment.mcId,
-                    parentId: null,
+                    ...newComment,
                     user: {
-                      ...newComment.user,
-                      email: null,
+                      id: session.user.id,
+                      name: session.user.name,
+                      email: session.user.email,
+                      image: session.user.image,
                     },
                     replies: [],
-                  } as unknown as CommentWithUser,
+                    parentId: null,
+                    userId: session.user.id,
+                    mcId: mcId,
+                  },
                   ...mc.comments,
                 ],
-                commentsCount: mc.commentsCount + 1,
               }
             : mc
         )
       );
 
-      // コメントが追加されたらコメントセクションを展開
-      if (!expandedComments.includes(mcId)) {
-        toggleComments(mcId);
-      }
-
-      return newComment;
+      toast.success("コメントを投稿しました");
+      return {
+        ...newComment,
+        user: {
+          id: session.user.id,
+          name: session.user.name,
+          email: session.user.email,
+          image: session.user.image,
+        },
+        replies: [],
+        parentId: null,
+        userId: session.user.id,
+        mcId: mcId,
+      };
     } catch (error) {
       console.error("Error posting comment:", error);
       toast.error("コメントの投稿に失敗しました");
-      throw error;
+      return null;
     }
   };
 
-  const handleEditComment = async (commentId: number, content: string) => {
-    try {
-      const response = await fetch(`/api/mc/comment/${commentId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
-
-      if (!response.ok) {
-        throw new Error("コメントの編集に失敗しました");
-      }
-
-      const updatedComment = await response.json();
-
-      // 親コメントと返信の両方を考慮して更新
-      setMcs((prevMcs) =>
-        prevMcs.map((prevMc) => ({
-          ...prevMc,
-          comments: prevMc.comments.map((c) => {
-            // 親コメントの更新
-            if (c.id === commentId) {
-              return { ...c, content: updatedComment.content };
-            }
-            // 返信コメントの更新
-            if (c.replies) {
-              return {
-                ...c,
-                replies: c.replies.map((r) =>
-                  r.id === commentId
-                    ? { ...r, content: updatedComment.content }
-                    : r
-                ),
-              };
-            }
-            return c;
-          }),
-        }))
-      );
-
-      toast.success("コメントを更新しました");
-    } catch (error) {
-      console.error("Error editing comment:", error);
-      toast.error("コメントの編集に失敗しました");
-    }
-  };
-
-  const handleDeleteComment = async (commentId: number) => {
-    try {
-      const response = await fetch(`/api/mc/comment/${commentId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("コメントの削除に失敗しました");
-      }
-
-      // 親コメントと返信の両方を考慮して削除
-      setMcs((prevMcs) =>
-        prevMcs.map((prevMc) => ({
-          ...prevMc,
-          comments: prevMc.comments
-            .map((c) => {
-              // 親コメントの場合は削除
-              if (c.id === commentId) {
-                return null;
-              }
-              // 返信コメントの削除
-              if (c.replies) {
-                return {
-                  ...c,
-                  replies: c.replies.filter((r) => r.id !== commentId),
-                };
-              }
-              return c;
-            })
-            .filter(Boolean) as CommentWithUser[],
-        }))
-      );
-
-      toast.success("コメントを削除しました");
-    } catch (error) {
-      console.error("Error deleting comment:", error);
-      toast.error("コメントの削除に失敗しました");
-    }
-  };
-
-  // handleReply関数を追加
-  const handleReply = async (
-    commentId: number,
-    content: string,
-    replyToUser?: string
-  ) => {
-    try {
-      const response = await fetch("/api/mc/reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          commentId,
-          content,
-          replyToUser,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("返信の投稿に失敗しました");
-      }
-
-      const newReply = await response.json();
-
-      setMcs((prevMcs) =>
-        prevMcs.map((prevMc) => ({
-          ...prevMc,
-          comments: prevMc.comments.map((c) =>
-            c.id === commentId
-              ? {
-                  ...c,
-                  replies: [...(c.replies || []), newReply],
-                }
-              : c
-          ),
-        }))
-      );
-
-      toast.success("返信を投稿しました");
-    } catch (error) {
-      console.error("Error posting reply:", error);
-      toast.error("返信の投稿に失敗しました");
-    }
+  // コメントの表示/非表示を切り替え
+  const toggleComments = (mcId: number) => {
+    setExpandedComments((prev) =>
+      prev.includes(mcId) ? prev.filter((id) => id !== mcId) : [...prev, mcId]
+    );
   };
 
   return (

@@ -245,8 +245,7 @@ export default function MCCard({
                             </div>
                           </div>
                         </div>
-                        {/* 編集・削除ボタン */}
-                        {sessionData?.user?.id === comment.userId && (
+                        {sessionData?.user?.email === comment.user.email && (
                           <div className="flex gap-2">
                             <button
                               onClick={() => {
@@ -260,7 +259,7 @@ export default function MCCard({
                             <button
                               onClick={() => {
                                 if (confirm("このコメントを削除しますか？")) {
-                                  handleDeleteComment?.(comment.id);
+                                  handleDeleteComment(comment.id);
                                 }
                               }}
                               className="text-sm text-red-600 hover:text-red-800"
@@ -275,7 +274,7 @@ export default function MCCard({
                           <textarea
                             value={editContent}
                             onChange={(e) => setEditContent(e.target.value)}
-                            className="w-full p-2 border rounded-md"
+                            className="w-full p-2 border rounded-md text-gray-900"
                             rows={3}
                           />
                           <div className="flex gap-2 justify-end">
@@ -294,9 +293,17 @@ export default function MCCard({
                                   editContent.trim() &&
                                   editContent !== comment.content
                                 ) {
-                                  await handleEditComment?.(
+                                  await handleEditComment(
                                     comment.id,
                                     editContent
+                                  );
+                                  // 状態を更新
+                                  setComments((prevComments) =>
+                                    prevComments.map((c) =>
+                                      c.id === comment.id
+                                        ? { ...c, content: editContent }
+                                        : c
+                                    )
                                   );
                                 }
                                 setEditingCommentId(null);

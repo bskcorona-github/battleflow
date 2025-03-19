@@ -176,6 +176,44 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
     }
   };
 
+  // コメントが更新された時の処理を追加
+  const handleCommentUpdated = (
+    mcId: number,
+    commentId: number,
+    newContent: string
+  ) => {
+    setMcs((prevMcs) =>
+      prevMcs.map((prevMc) =>
+        prevMc.id === mcId
+          ? {
+              ...prevMc,
+              comments: prevMc.comments.map((comment) =>
+                comment.id === commentId
+                  ? { ...comment, content: newContent }
+                  : comment
+              ),
+            }
+          : prevMc
+      )
+    );
+  };
+
+  // コメントが削除された時の処理を追加
+  const handleCommentDeleted = (mcId: number, commentId: number) => {
+    setMcs((prevMcs) =>
+      prevMcs.map((prevMc) =>
+        prevMc.id === mcId
+          ? {
+              ...prevMc,
+              comments: prevMc.comments.filter(
+                (comment) => comment.id !== commentId
+              ),
+            }
+          : prevMc
+      )
+    );
+  };
+
   const handleResetComments = async () => {
     if (
       !confirm(
@@ -416,6 +454,12 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
                   mcId={mc.id}
                   comments={mc.comments}
                   onCommentAdded={handleCommentAdded}
+                  onCommentUpdated={(commentId, newContent) =>
+                    handleCommentUpdated(mc.id, commentId, newContent)
+                  }
+                  onCommentDeleted={(commentId) =>
+                    handleCommentDeleted(mc.id, commentId)
+                  }
                   type="ranking"
                 />
               </div>
@@ -487,8 +531,10 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         include: {
           user: {
             select: {
+              id: true,
               name: true,
               image: true,
+              email: true,
             },
           },
         },
@@ -525,9 +571,10 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       mcId: comment.mcRankId,
       parentId: comment.parentId,
       user: {
+        id: comment.user.id,
         name: comment.user.name,
         image: comment.user.image,
-        email: null,
+        email: comment.user.email,
       },
       replies: [],
     })) as CommentWithUser[],
