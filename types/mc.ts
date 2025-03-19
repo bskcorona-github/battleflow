@@ -1,13 +1,38 @@
 import { Like, Comment } from "@prisma/client";
 
-export interface User {
-  id: string;
-  name: string | null;
-  email: string | null;
+export type MCFrontend = {
+  id: number;
+  name: string;
   image: string | null;
-}
+  description: string | null;
+  hood: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
-export interface Comment {
+export type MCWithLikesAndComments = {
+  id: number;
+  name: string;
+  affiliation: string | null;
+  description: string | null;
+  hood: string | null;
+  image: string | null;
+  createdAt: string;
+  updatedAt: string;
+  likesCount: number;
+  isLikedByUser: boolean;
+  likes: {
+    id: number;
+    userId: string;
+    mcId: number;
+    createdAt: string;
+  }[];
+  comments: CommentWithUser[];
+} & {
+  -readonly [K in keyof MCWithLikesAndComments]: MCWithLikesAndComments[K];
+};
+
+export type CommentWithUser = {
   id: number;
   content: string;
   userId: string;
@@ -15,33 +40,10 @@ export interface Comment {
   createdAt: string;
   updatedAt: string;
   parentId: number | null;
-  user: User;
-}
-
-export interface CommentWithUser extends Comment {
   replies: CommentWithUser[];
-}
-
-export interface MC {
-  id: number;
-  name: string;
-  image: string | null;
-  description: string | null;
-  createdAt: string;
-  updatedAt: string;
-  likesCount: number;
-  isLikedByUser: boolean;
-  comments: CommentWithUser[];
-}
-
-export interface MCWithLikesAndComments extends MC {
-  likes: {
-    userId: string;
-  }[];
-}
-
-export interface APIResponse<T> {
-  data?: T;
-  error?: string;
-  statusCode: number;
-}
+  user: {
+    name: string | null;
+    email: string | null;
+    image: string | null;
+  };
+};

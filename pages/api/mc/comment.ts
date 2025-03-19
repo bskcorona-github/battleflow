@@ -1,75 +1,89 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { prisma } from "@/lib/prisma";
-import { APIError } from "@/utils/errors";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
+    console.log("Request body:", req.body);
     const session = await getServerSession(req, res, authOptions);
+    console.log("Session in comment API:", session);
+
     if (!session?.user?.id) {
-      throw new APIError("認証が必要です", 401);
+      console.log("No user ID in session");
+      return res.status(401).json({ error: "Unauthorized - No user ID" });
     }
 
-    switch (req.method) {
-      case "POST": {
-        const { mcId, content } = req.body;
+    const { mcId, content } = req.body;
+    console.log("Attempting to create comment:", {
+      mcId,
+      content,
+      userId: session.user.id,
+    });
 
-        if (!mcId || !content?.trim()) {
-          throw new APIError("必要なパラメータが不足しています", 400);
-        }
+    if (!mcId || !content?.trim()) {
+      console.log("Invalid request data:", { mcId, content });
+      return res.status(400).json({ error: "MC ID and content are required" });
+    }
 
-        // MCの存在確認
-        const mc = await prisma.mC.findUnique({
-          where: { id: parseInt(mcId) },
-        });
+    // MCの存在確認
+    const mc = await prisma.mC.findUnique({
+      where: { id: parseInt(mcId) },
+    });
 
-        if (!mc) {
-          throw new APIError("MCが見つかりません", 404);
-        }
+    if (!mc) {
+      console.log("MC not found:", mcId);
+      return res.status(404).json({ error: "MC not found" });
+    }
 
-        const comment = await prisma.mCComment.create({
-          data: {
-            content: content.trim(),
-            userId: session.user.id,
-            mcId: parseInt(mcId),
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-                email: true,
-              },
+    try {
+      const comment = await prisma.mCComment.create({
+        data: {
+          content: content.trim(),
+          userId: session.user.id,
+          mcId: parseInt(mcId),
+        },
+        include: {
+          user: {
+            select: {
+              name: true,
+              image: true,
             },
           },
-        });
+        },
+      });
 
-        return res.status(200).json({
-          id: comment.id,
-          content: comment.content,
-          createdAt: comment.createdAt.toISOString(),
-          updatedAt: comment.updatedAt.toISOString(),
-          userId: comment.userId,
-          mcId: comment.mcId,
-          parentId: comment.parentId,
-          user: comment.user,
-          replies: [],
-        });
-      }
+      console.log("Comment created successfully:", comment);
 
-      default:
-        throw new APIError("Method not allowed", 405);
+      return res.status(200).json({
+        id: comment.id,
+        content: comment.content,
+        createdAt: comment.createdAt.toISOString(),
+        user: {
+          name: comment.user.name,
+          image: comment.user.image,
+        },
+      });
+    } catch (dbError) {
+      console.error("Database error:", dbError);
+      return res.status(500).json({
+        error: "Failed to create comment",
+        details:
+          dbError instanceof Error ? dbError.message : "Unknown database error",
+      });
     }
   } catch (error) {
-    console.error("API Error:", error);
-    if (error instanceof APIError) {
-      return res.status(error.statusCode).json({ error: error.message });
-    }
-    return res.status(500).json({ error: "予期せぬエラーが発生しました" });
+    console.error("Error handling comment:", error);
+    return res.status(500).json({
+      error: "Failed to process comment",
+      details: error instanceof Error ? error.message : "Unknown error",
+    });
   }
 }
