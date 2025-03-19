@@ -24,9 +24,17 @@ export const authOptions: AuthOptions = {
       }
       return token;
     },
-    session: async ({ session, user }) => {
-      if (session.user) {
-        session.user.id = user.id;
+    session: async ({ session, token }) => {
+      if (session?.user) {
+        session.user.id = token.id as string;
+
+        // 管理者権限の確認（必要な場合）
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { isAdmin: true },
+        });
+
+        session.user.isAdmin = dbUser?.isAdmin || false;
       }
       return session;
     },
