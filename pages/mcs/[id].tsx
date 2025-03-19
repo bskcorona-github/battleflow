@@ -24,8 +24,8 @@ type Props = {
 };
 
 export default function MCDetail({ mc, session }: Props) {
-  const router = useRouter();
-  const { data: sessionData } = useSession();
+  const _router = useRouter();
+  const { data: _sessionData } = useSession();
   const [likes, setLikes] = useState(mc.likes.length);
   const [isLiked, setIsLiked] = useState(
     mc.likes.some((like) => like.userId === session?.user?.id)

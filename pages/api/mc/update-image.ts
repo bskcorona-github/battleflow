@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { searchAndSaveImage } from "@/lib/imageSearch";
-import { prisma } from "@/lib/prisma";
 
 export default async function handler(
   req: NextApiRequest,

@@ -28,7 +28,6 @@ export default function CommentReply({
   const { data: sessionData } = useSession();
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState("");
-  const [replyToUser, setReplyToUser] = useState<string | null>(null);
   const [replyingToId, setReplyingToId] = useState<number | null>(null);
   const [editingReplyId, setEditingReplyId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -46,7 +45,6 @@ export default function CommentReply({
       await onReply(comment.id, content, replyToUserName);
       setReplyContent("");
       setIsReplying(false);
-      setReplyToUser(null);
       setReplyingToId(null);
     } catch (error) {
       console.error("Error posting reply:", error);
@@ -79,7 +77,6 @@ export default function CommentReply({
           onClick={() => {
             setIsReplying(false);
             setReplyContent("");
-            setReplyToUser(null);
             setReplyingToId(null);
           }}
           className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
@@ -104,7 +101,6 @@ export default function CommentReply({
         <button
           onClick={() => {
             setIsReplying(true);
-            setReplyToUser(null);
             setReplyingToId(null);
           }}
           className="text-sm text-blue-600 hover:text-blue-800"
@@ -245,7 +241,6 @@ export default function CommentReply({
                       <button
                         onClick={() => {
                           setIsReplying(true);
-                          setReplyToUser(reply.user.name || "Anonymous");
                           setReplyingToId(reply.id);
                         }}
                         className="text-xs text-blue-600 hover:text-blue-800 mt-2"

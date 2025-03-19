@@ -29,77 +29,41 @@ export default function MCCard({
   expandedComments,
   toggleComments,
 }: MCCardProps) {
-  const { data: sessionData } = useSession();
-  const [newComment, setNewComment] = useState("");
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [comments, setComments] = useState<CommentWithUser[]>(
-    mc.comments.map((comment: CommentWithUser) => ({
-      ...comment,
-      replies: comment.replies || [],
-      user: {
-        name: comment.user.name,
-        email: comment.user.email || null,
-        image: comment.user.image,
-      },
-    }))
-  );
-  const [isCommenting, setIsCommenting] = useState(false);
+  const { data: session } = useSession();
+  const [commentContent, setCommentContent] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
-  const [editContent, setEditContent] = useState("");
+  const [editCommentContent, setEditCommentContent] = useState("");
+  const [currentPageNumber, setCurrentPageNumber] = useState(1);
 
   // showCommentsの状態をexpandedCommentsから取得
   const isExpanded = expandedComments.includes(mc.id);
 
   useEffect(() => {
     console.log("Initial comments:", mc.comments);
-    console.log("Processed comments:", comments);
-  }, [mc.comments, comments]);
+    console.log("Processed comments:", mc.comments);
+  }, [mc.comments]);
 
   const handleLikeClick = async () => {
-    if (!sessionData) {
+    if (!session) {
       toast.error("いいねするにはログインが必要です");
       return;
     }
-    setIsUpdating(true);
     try {
       await onLike(mc.id);
     } catch (error) {
       console.error("Error liking MC:", error);
-    } finally {
-      setIsUpdating(false);
     }
   };
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sessionData || !newComment.trim()) return;
+    if (!session || !commentContent.trim()) return;
 
     try {
-      const response = await onComment(mc.id, newComment);
+      const response = await onComment(mc.id, commentContent);
       // 新しいコメントをcommentsステートに追加
-      const newCommentObj: CommentWithUser = {
-        ...response,
-        replies: [],
-        user: {
-          name: sessionData.user.name ?? null,
-          email: sessionData.user.email ?? null,
-          image: sessionData.user.image ?? null,
-        },
-      };
-
-      // mc.commentsも更新
-      mc.comments = [newCommentObj, ...mc.comments];
-
-      // コメントを先頭に追加し、親コメントのみを表示
-      setComments(
-        (prev) =>
-          [
-            newCommentObj,
-            ...prev.filter((c) => c.parentId === null),
-          ] as CommentWithUser[]
-      );
-
-      setNewComment("");
+      mc.comments = [response, ...mc.comments];
+      setCommentContent("");
     } catch (error) {
       console.error("Error posting comment:", error);
     }
@@ -117,6 +81,11 @@ export default function MCCard({
   const createSanitizedHTML = (html: string) => {
     const sanitizedHTML = DOMPurify.sanitize(html);
     return { __html: sanitizedHTML };
+  };
+
+  // セッション関連の処理
+  const isCurrentUserComment = (comment: CommentWithUser) => {
+    return session?.user?.email === comment.user.email;
   };
 
   return (
@@ -139,13 +108,13 @@ export default function MCCard({
       <div className="p-6 bg-white">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-gray-800">{mc.name}</h2>
-          {sessionData && (
+          {session && (
             <button
               onClick={handleLikeClick}
               className={`flex items-center gap-1 ${
                 mc.isLikedByUser ? "text-red-500" : "text-gray-500"
               } hover:text-red-500 transition-colors`}
-              disabled={!sessionData}
+              disabled={!session}
             >
               <svg
                 className={`w-5 h-5 ${mc.isLikedByUser ? "fill-current" : ""}`}
@@ -191,19 +160,19 @@ export default function MCCard({
           {isExpanded && (
             <div className="mt-4 space-y-4">
               {/* コメント入力フォーム */}
-              {sessionData && (
+              {session && (
                 <form onSubmit={handleCommentSubmit} className="space-y-2">
                   <div className="flex space-x-2">
                     <input
                       type="text"
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
+                      value={commentContent}
+                      onChange={(e) => setCommentContent(e.target.value)}
                       placeholder="コメントを追加..."
                       className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
                     />
                     <button
                       type="submit"
-                      disabled={!newComment.trim()}
+                      disabled={!commentContent.trim()}
                       className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
                     >
                       投稿
@@ -245,12 +214,12 @@ export default function MCCard({
                             </div>
                           </div>
                         </div>
-                        {sessionData?.user?.email === comment.user.email && (
+                        {isCurrentUserComment(comment) && (
                           <div className="flex gap-2">
                             <button
                               onClick={() => {
                                 setEditingCommentId(comment.id);
-                                setEditContent(comment.content);
+                                setEditCommentContent(comment.content);
                               }}
                               className="text-sm text-blue-600 hover:text-blue-800"
                             >
@@ -272,8 +241,10 @@ export default function MCCard({
                       {editingCommentId === comment.id ? (
                         <div className="space-y-2">
                           <textarea
-                            value={editContent}
-                            onChange={(e) => setEditContent(e.target.value)}
+                            value={editCommentContent}
+                            onChange={(e) =>
+                              setEditCommentContent(e.target.value)
+                            }
                             className="w-full p-2 border rounded-md text-gray-900"
                             rows={3}
                           />
@@ -281,7 +252,7 @@ export default function MCCard({
                             <button
                               onClick={() => {
                                 setEditingCommentId(null);
-                                setEditContent("");
+                                setEditCommentContent("");
                               }}
                               className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
                             >
@@ -290,24 +261,22 @@ export default function MCCard({
                             <button
                               onClick={async () => {
                                 if (
-                                  editContent.trim() &&
-                                  editContent !== comment.content
+                                  editCommentContent.trim() &&
+                                  editCommentContent !== comment.content
                                 ) {
                                   await handleEditComment(
                                     comment.id,
-                                    editContent
+                                    editCommentContent
                                   );
                                   // 状態を更新
-                                  setComments((prevComments) =>
-                                    prevComments.map((c) =>
-                                      c.id === comment.id
-                                        ? { ...c, content: editContent }
-                                        : c
-                                    )
+                                  mc.comments = mc.comments.map((c) =>
+                                    c.id === comment.id
+                                      ? { ...c, content: editCommentContent }
+                                      : c
                                   );
                                 }
                                 setEditingCommentId(null);
-                                setEditContent("");
+                                setEditCommentContent("");
                               }}
                               className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
                             >
