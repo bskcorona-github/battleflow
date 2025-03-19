@@ -18,23 +18,17 @@ export const authOptions: AuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   callbacks: {
-    async session({ session, token }) {
-      if (session?.user) {
-        const user = await prisma.user.findUnique({
-          where: { email: session.user.email! },
-          select: { id: true, isAdmin: true },
-        });
-
-        session.user.id = user?.id;
-        session.user.isAdmin = user?.isAdmin || false;
-      }
-      return session;
-    },
-    async jwt({ token, user, account }) {
+    jwt: async ({ token, user }) => {
       if (user) {
-        token.sub = user.id;
+        token.id = user.id;
       }
       return token;
+    },
+    session: async ({ session, user }) => {
+      if (session.user) {
+        session.user.id = user.id;
+      }
+      return session;
     },
   },
   debug: process.env.NODE_ENV === "development",
