@@ -4,3 +4,5 @@ const navigation = [
   { name: "ランキング", href: "/ranking" },
   // ... 他のナビゲーション項目
 ];
+
+export default navigation;

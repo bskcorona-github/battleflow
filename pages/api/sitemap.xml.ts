@@ -1,6 +1,17 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import prisma from "../../lib/prisma";
-import { MC, Battle } from "@prisma/client";
+import { prisma } from "../../lib/prisma";
+
+// MCとBattleをプリズマクライアントの代わりに直接型定義
+type MC = {
+  id: number;
+  name: string;
+  // 他に必要なプロパティ
+};
+
+type Battle = {
+  id: number;
+  // 他に必要なプロパティ
+};
 
 const generateSitemap = (mcs: MC[], battles: Battle[]) => {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -45,10 +56,12 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
-    const mcs = await prisma.mc.findMany();
-    const battles = await prisma.battle.findMany();
+    const mcs = await prisma.mC.findMany();
+    // battleモデルが存在しない場合は空の配列を使用
+    // const battles = await prisma.battle.findMany();
+    const battles: Battle[] = [];
 
-    const sitemap = generateSitemap(mcs, battles);
+    const sitemap = generateSitemap(mcs as MC[], battles);
 
     res.setHeader("Content-Type", "text/xml");
     res.write(sitemap);

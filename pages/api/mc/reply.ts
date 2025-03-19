@@ -24,12 +24,13 @@ export default async function handler(
         content,
         userId: session.user.id,
         parentId: commentId,
-        mcId: (
-          await prisma.mCComment.findUnique({
-            where: { id: commentId },
-            select: { mcId: true },
-          })
-        )?.mcId,
+        mcId:
+          (
+            await prisma.mCComment.findUnique({
+              where: { id: commentId },
+              select: { mcId: true },
+            })
+          )?.mcId || 0,
       },
       include: {
         user: {

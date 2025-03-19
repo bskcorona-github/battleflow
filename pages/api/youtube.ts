@@ -128,7 +128,15 @@ export default async function handler(
   try {
     // まずチャンネルの情報を取得してアップロードプレイリストIDを取得
     const channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${API_KEYS[0]}`;
-    const channelData = await fetchWithApiKey(channelUrl);
+    const channelData = (await fetchWithApiKey(channelUrl)) as {
+      items: Array<{
+        contentDetails: {
+          relatedPlaylists: {
+            uploads: string;
+          };
+        };
+      }>;
+    };
 
     const uploadsPlaylistId =
       channelData.items[0].contentDetails.relatedPlaylists.uploads;

@@ -3,7 +3,7 @@ import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { ChatBubbleLeftIcon } from "@heroicons/react/24/outline";
 import { MCWithLikesAndComments, CommentWithUser } from "@/types/mc";
-import CommentItem from "./CommentItem";
+// import CommentItem from "./CommentItem"; // 未使用のインポートをコメントアウト
 import { toast } from "react-hot-toast";
 import CommentReply from "./CommentReply";
 import DOMPurify from "isomorphic-dompurify";
@@ -33,7 +33,8 @@ export default function MCCard({
   const [commentContent, setCommentContent] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editCommentContent, setEditCommentContent] = useState("");
-  const [currentPageNumber, setCurrentPageNumber] = useState(1);
+  // 未使用の変数をコメントアウト
+  // const [currentPageNumber, setCurrentPageNumber] = useState(1);
 
   // showCommentsの状態をexpandedCommentsから取得
   const isExpanded = expandedComments.includes(mc.id);
@@ -269,10 +270,11 @@ export default function MCCard({
                                     editCommentContent
                                   );
                                   // 状態を更新
-                                  mc.comments = mc.comments.map((c) =>
-                                    c.id === comment.id
-                                      ? { ...c, content: editCommentContent }
-                                      : c
+                                  mc.comments = mc.comments.map(
+                                    (c: CommentWithUser) =>
+                                      c.id === comment.id
+                                        ? { ...c, content: editCommentContent }
+                                        : c
                                   );
                                 }
                                 setEditingCommentId(null);

@@ -1,13 +1,13 @@
 import { GetServerSideProps } from "next";
 import { prisma } from "../../lib/prisma";
 import Head from "next/head";
-import { useRouter } from "next/router";
+// import { useRouter } from "next/router";
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import DOMPurify from "isomorphic-dompurify";
 import type { MCWithLikesAndComments, CommentWithUser } from "@/types/mc";
-import { getSession, useSession } from "next-auth/react";
+import { getSession /* , useSession */ } from "next-auth/react";
 import { toast } from "react-hot-toast";
 
 type Props = {
@@ -24,8 +24,8 @@ type Props = {
 };
 
 export default function MCDetail({ mc, session }: Props) {
-  const _router = useRouter();
-  const { data: _sessionData } = useSession();
+  // const _router = useRouter();
+  // const { data: _sessionData } = useSession();
   const [likes, setLikes] = useState(mc.likes.length);
   const [isLiked, setIsLiked] = useState(
     mc.likes.some((like) => like.userId === session?.user?.id)

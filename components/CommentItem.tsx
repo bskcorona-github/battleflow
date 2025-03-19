@@ -25,8 +25,14 @@ export default function CommentItem({
     if (!replyContent.trim()) return;
 
     if (parentComment) {
-      const mentionContent = `@${comment.user.name} ${replyContent}`;
-      await onReply(parentComment.id, mentionContent, comment.user.name);
+      const mentionContent = `@${
+        comment.user.name || "Anonymous"
+      } ${replyContent}`;
+      await onReply(
+        parentComment.id,
+        mentionContent,
+        comment.user.name || "Anonymous"
+      );
     } else {
       await onReply(comment.id, replyContent);
     }

@@ -1,61 +1,35 @@
-import { Video } from "@prisma/client";
+// import { Video } from "@prisma/client"; // 未使用のインポート
 import { google } from "googleapis";
 
-const API_KEYS = [
-  process.env.YOUTUBE_API_KEY,
-  process.env.YOUTUBE_API_KEY2,
-].filter(Boolean) as string[];
+// 警告を修正するため、未使用のものはコメントアウト
+// const API_KEYS = [
+//   process.env.YOUTUBE_API_KEY,
+//   process.env.YOUTUBE_API_KEY2,
+// ].filter(Boolean) as string[];
 
-let currentKeyIndex = 0;
+// let currentKeyIndex = 0;
 
-function getNextApiKey(): string {
-  const key = API_KEYS[currentKeyIndex];
-  currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
-  return key;
-}
+// function getNextApiKey(): string {
+//   const key = API_KEYS[currentKeyIndex];
+//   currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+//   return key;
+// }
 
-interface YouTubeApiResponse {
-  items: YouTubeApiItem[];
-  nextPageToken?: string;
-}
-
-interface YouTubeChannelResponse {
-  items: Array<{
-    contentDetails: {
-      relatedPlaylists: {
-        uploads: string;
-      };
-    };
-  }>;
-}
-
-interface YouTubeApiItem {
-  snippet: {
-    resourceId: {
-      videoId: string;
-    };
-    title: string;
-    thumbnails: {
-      medium: {
-        url: string;
-      };
-    };
-    publishedAt: string;
-    channelTitle: string;
-  };
-}
-
-interface YouTubeStatsApiResponse {
-  items: {
-    id: string;
-    statistics: {
-      viewCount: string;
-    };
-    contentDetails: {
-      duration: string;
-    };
-  }[];
-}
+// interface YouTubeApiItem {
+//   snippet: {
+//     resourceId: {
+//       videoId: string;
+//     };
+//     title: string;
+//     thumbnails: {
+//       medium: {
+//         url: string;
+//       };
+//     };
+//     publishedAt: string;
+//     channelTitle: string;
+//   };
+// }
 
 const youtube = google.youtube({
   version: "v3",
@@ -98,32 +72,14 @@ function getDurationInMinutes(duration: string): number {
   return hours * 60 + minutes + seconds / 60;
 }
 
-async function fetchWithApiKey(
-  url: string,
-  attemptCount = 0
-): Promise<
-  YouTubeApiResponse | YouTubeStatsApiResponse | YouTubeChannelResponse
-> {
-  if (attemptCount >= API_KEYS.length) {
-    throw new Error("All API keys have been exhausted");
-  }
-
-  const apiKey = getNextApiKey();
-  const finalUrl = url.replace(/key=[^&]+/, `key=${apiKey}`);
-
-  const response = await fetch(finalUrl);
-  const data = await response.json();
-
-  if (!response.ok) {
-    if (data.error?.message?.includes("quota")) {
-      console.log(`API key ${apiKey} quota exceeded, trying next key...`);
-      return fetchWithApiKey(url, attemptCount + 1);
-    }
-    throw new Error(data.error?.message || "YouTube API error");
-  }
-
-  return data;
-}
+// async function fetchWithApiKey( // 未使用の関数
+//   url: string,
+//   attemptCount = 0
+// ): Promise<
+//   YouTubeApiResponse | YouTubeStatsApiResponse | YouTubeChannelResponse
+// > {
+//   ... 関数の内容 ...
+// }
 
 export async function fetchChannelVideos(
   channelId: string
@@ -153,21 +109,21 @@ export async function fetchChannelVideos(
     // すべての動画を取得するまでループ
     do {
       // プレイリストの動画を取得
-      const { data: videosData } = await youtube.playlistItems.list({
+      const { data }: { data: any } = await youtube.playlistItems.list({
         part: ["snippet"],
         playlistId: uploadsPlaylistId,
         maxResults: 50, // 1回のリクエストで最大数を取得
         pageToken: pageToken,
       });
 
-      if (!videosData.items) {
+      if (!data.items) {
         console.error("No videos found in playlist");
         break;
       }
 
       // 動画IDのリストを作成
-      const videoIds = videosData.items
-        .map((item) => item.snippet?.resourceId?.videoId)
+      const videoIds = data.items
+        .map((item: any) => item.snippet?.resourceId?.videoId)
         .filter(Boolean);
 
       // 動画の詳細情報を取得（contentDetailsを追加）
@@ -202,7 +158,7 @@ export async function fetchChannelVideos(
       allVideos = [...allVideos, ...videos];
 
       // 次のページのトークンを取得
-      pageToken = videosData.nextPageToken;
+      pageToken = data.nextPageToken;
 
       // API制限を考慮して少し待機
       await new Promise((resolve) => setTimeout(resolve, 1000));
