@@ -17,6 +17,7 @@ type MCCardProps = {
   handleReply: (commentId: number, content: string) => Promise<void>;
   expandedComments: number[];
   toggleComments: (mcId: number) => void;
+  setMcs: React.Dispatch<React.SetStateAction<MCWithLikesAndComments[]>>;
 };
 
 export default function MCCard({
@@ -28,6 +29,7 @@ export default function MCCard({
   handleReply,
   expandedComments,
   toggleComments,
+  setMcs,
 }: MCCardProps) {
   const { data: session } = useSession();
   const [commentContent, setCommentContent] = useState("");
@@ -99,88 +101,115 @@ export default function MCCard({
     return session?.user?.email === comment.user.email;
   };
 
-  // コメント展開時に全コメントを読み込む（パフォーマンス最適化版）
+  // コメントキャッシュのキー
+  const commentsStorageKey = `mc-comments-${mc.id}`;
+  // キャッシュの有効期限(15分)
+  const CACHE_EXPIRY = 15 * 60 * 1000;
+
+  // コメント展開時に全コメントを読み込む
   useEffect(() => {
-    // コメントが表示されておらず、まだロード済みでない場合は何もしない
-    if (
-      !isExpanded ||
-      hasLoadedAllComments ||
-      isLoadingComments ||
-      mc.comments.length === 0
-    ) {
-      return;
-    }
+    const isExpanded = expandedComments.includes(mc.id);
+    if (isExpanded && !hasLoadedAllComments && !isLoadingComments) {
+      const fetchAllComments = async () => {
+        setIsLoadingComments(true);
 
-    const fetchAllComments = async () => {
-      setIsLoadingComments(true);
-      try {
-        // コントローラを作成して8秒でタイムアウトするように設定
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        // まずSessionStorageからコメントのキャッシュをチェック
+        try {
+          const cachedData = sessionStorage.getItem(commentsStorageKey);
 
-        // パフォーマンス向上のためのキャッシュ戦略
-        const cacheKey = `comments-${mc.id}`;
-        const cachedComments = sessionStorage.getItem(cacheKey);
+          if (cachedData) {
+            const { comments, timestamp } = JSON.parse(cachedData);
+            const now = Date.now();
 
-        // キャッシュがある場合、それを使用
-        if (cachedComments) {
-          try {
-            const comments = JSON.parse(cachedComments);
-            mc.comments = comments;
+            // キャッシュが有効期限内なら使用
+            if (now - timestamp < CACHE_EXPIRY) {
+              console.log(`Using cached comments for MC #${mc.id}`);
+
+              // MCsの状態を更新
+              setMcs((prevMcs) =>
+                prevMcs.map((prevMc) =>
+                  prevMc.id === mc.id ? { ...prevMc, comments } : prevMc
+                )
+              );
+
+              setHasLoadedAllComments(true);
+              setIsLoadingComments(false);
+              return;
+            }
+          }
+        } catch (e) {
+          // キャッシュ読み込みエラーは無視して通常のフェッチに進む
+          console.warn("Cache read failed:", e);
+        }
+
+        // キャッシュがない場合やキャッシュが古い場合はAPIから取得
+        try {
+          // 遅延ロードとタイムアウト設定
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+          const response = await fetch(
+            `/api/mcs/fetch-comments?mcId=${mc.id}`,
+            {
+              signal: controller.signal,
+            }
+          );
+
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const comments = await response.json();
+
+            // MCsの状態を更新
+            setMcs((prevMcs) =>
+              prevMcs.map((prevMc) =>
+                prevMc.id === mc.id ? { ...prevMc, comments } : prevMc
+              )
+            );
+
+            // コメントをキャッシュに保存
+            try {
+              sessionStorage.setItem(
+                commentsStorageKey,
+                JSON.stringify({
+                  comments,
+                  timestamp: Date.now(),
+                })
+              );
+            } catch (e) {
+              console.warn("Failed to cache comments:", e);
+            }
+
             setHasLoadedAllComments(true);
-            setIsLoadingComments(false);
-            clearTimeout(timeoutId);
-            return;
-          } catch (error) {
-            // キャッシュの解析に失敗した場合は無視して通常のフェッチに戻る
-            console.log("キャッシュの解析に失敗しました", error);
+          } else {
+            console.error("コメント取得エラー:", await response.text());
           }
-        }
-
-        const response = await fetch(`/api/mcs/fetch-comments?mcId=${mc.id}`, {
-          signal: controller.signal,
-          headers: {
-            "Cache-Control": "max-age=120", // 2分間キャッシュを有効に
-          },
-        });
-
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const comments = await response.json();
-          // 既存のコメントを全てのコメントで置き換える
-          mc.comments = comments;
-          // セッションストレージにキャッシュ（5分間有効）
-          try {
-            sessionStorage.setItem(cacheKey, JSON.stringify(comments));
-            // 5分後にキャッシュを削除するタイマーを設定
-            setTimeout(() => {
-              sessionStorage.removeItem(cacheKey);
-            }, 5 * 60 * 1000);
-          } catch (error) {
-            // ストレージの容量制限などのエラーは無視
-            console.log("コメントのキャッシュに失敗しました", error);
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            console.error("コメント読み込みがタイムアウトしました");
+          } else {
+            console.error("コメント読み込みエラー:", error);
           }
-          setHasLoadedAllComments(true);
-        } else {
-          console.error("コメント取得エラー:", await response.text());
+        } finally {
+          setIsLoadingComments(false);
         }
-      } catch (error) {
-        // AbortErrorは無視
-        if (error instanceof DOMException && error.name === "AbortError") {
-          console.log("コメント読み込みを中断しました");
-        } else {
-          console.error("コメント読み込みエラー:", error);
-        }
-      } finally {
-        setIsLoadingComments(false);
-      }
-    };
+      };
 
-    // 次のレンダリングサイクルでフェッチを開始（遅延を短縮）
-    const timerId = setTimeout(fetchAllComments, 30);
-    return () => clearTimeout(timerId); // クリーンアップ関数
-  }, [isExpanded, mc.id, hasLoadedAllComments, isLoadingComments]); // mc.commentsを依存配列から削除
+      // 遅延読み込みでUIをブロックしないようにする
+      const timer = setTimeout(() => {
+        fetchAllComments();
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [
+    expandedComments,
+    mc.id,
+    hasLoadedAllComments,
+    isLoadingComments,
+    setMcs,
+    commentsStorageKey,
+  ]);
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-200 w-[400px] flex flex-col">

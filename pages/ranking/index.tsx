@@ -545,10 +545,20 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
-  const session = await getSession(context);
+  // パフォーマンス向上のためにキャッシュヘッダーを設定
+  context.res.setHeader(
+    "Cache-Control",
+    "public, s-maxage=10, stale-while-revalidate=59"
+  );
+
   try {
-    // セッションがある場合、ユーザー情報を取得（クエリを一度に最適化）
+    // セッションとMCデータを並列で取得
+    const session = await getSession(context);
+
+    // ユーザー情報と投票状況を並列で取得
     let user = null;
+    let votedMCIds: number[] = [];
+
     if (session?.user?.email) {
       user = await prisma.user.findUnique({
         where: { email: session.user.email },
@@ -557,41 +567,46 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           isAdmin: true,
         },
       });
+
+      // このユーザーが投票済みのMCを取得
+      if (user) {
+        const userVotes = await prisma.rankingVote.findMany({
+          where: {
+            userId: user.id,
+          },
+          select: {
+            mcRankId: true,
+          },
+        });
+        votedMCIds = userVotes.map((vote) => vote.mcRankId);
+      }
     }
 
-    // 投票履歴を効率的に先取得（MCRankと同時に取得しないことで個別のクエリを最適化）
-    const votedMCIds =
-      session && user?.id
-        ? (
-            await prisma.vote.findMany({
-              where: { userId: user.id },
-              select: { mcId: true },
-            })
-          ).map((vote) => vote.mcId)
-        : [];
-
-    // MCRankの取得とLOADクエリを最適化（必要最小限のデータのみを選択）
+    // MCのランキングデータを取得（必要最小限のデータのみ）
     const mcs = await prisma.mCRank.findMany({
       select: {
         id: true,
         name: true,
-        totalScore: true,
+        image: true,
         rhymeScore: true,
         vibesScore: true,
         flowScore: true,
         dialogueScore: true,
         musicalityScore: true,
+        totalScore: true,
         createdAt: true,
         updatedAt: true,
-        // 投票情報はサーバー側で処理して、クライアントには最低限の情報だけ渡す
         _count: {
           select: {
             votes: true,
           },
         },
-        // 初期表示時には必要最小限のコメントのみ取得して負荷を軽減
+        // コメント数を削減して初期表示を高速化
         comments: {
-          take: 2, // 初期表示では最新2件のみに制限
+          take: 1,
+          where: {
+            parentId: null,
+          },
           select: {
             id: true,
             content: true,
@@ -605,63 +620,77 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                 id: true,
                 name: true,
                 image: true,
-                email: true,
+                // メールアドレスは表示に不要なので除外
               },
             },
           },
           orderBy: {
             createdAt: "desc",
           },
-          where: {
-            parentId: null, // 親コメントのみ取得（返信は必要時に非同期読み込み）
-          },
         },
       },
       orderBy: {
-        totalScore: "desc", // 合計スコアでソート
+        totalScore: "desc",
       },
     });
 
-    const serializedMcs = mcs.map((mc) => ({
-      ...mc,
-      // 投票数をクライアントに渡す
-      voteCount: mc._count.votes,
-      // 該当ユーザーが投票済みかどうかのフラグ
-      hasVoted: votedMCIds.includes(mc.id),
-      comments: mc.comments.map((comment) => ({
-        id: comment.id,
-        content: comment.content,
-        createdAt: comment.createdAt.toISOString(),
-        updatedAt: comment.updatedAt.toISOString(),
-        userId: comment.userId,
-        mcId: comment.mcRankId,
-        parentId: comment.parentId,
-        user: {
-          id: comment.user.id,
-          name: comment.user.name,
-          image: comment.user.image,
-          email: comment.user.email,
-        },
-        replies: [], // 返信は初期状態では空配列（必要時に非同期で取得）
-      })),
-      createdAt: mc.createdAt.toISOString(),
-      updatedAt: mc.updatedAt.toISOString(),
-    }));
+    // シリアライズ処理を最適化
+    const serializedMcs = mcs.map((mc) => {
+      // 必要なプロパティのみを含む新しいオブジェクトを作成
+      const serializedMC = {
+        id: mc.id,
+        name: mc.name,
+        image: mc.image,
+        rhymeScore: mc.rhymeScore,
+        vibesScore: mc.vibesScore,
+        flowScore: mc.flowScore,
+        dialogueScore: mc.dialogueScore,
+        musicalityScore: mc.musicalityScore,
+        totalScore: mc.totalScore,
+        voteCount: mc._count.votes,
+        hasVoted: votedMCIds.includes(mc.id),
+        createdAt: mc.createdAt.toISOString(),
+        updatedAt: mc.updatedAt.toISOString(),
+        // コメントも最小限の情報に絞る
+        comments: mc.comments.map((comment: any) => ({
+          id: comment.id,
+          content: comment.content,
+          createdAt: comment.createdAt.toISOString(),
+          updatedAt: comment.updatedAt.toISOString(),
+          userId: comment.userId,
+          mcId: comment.mcRankId,
+          parentId: comment.parentId,
+          user: {
+            id: comment.user.id,
+            name: comment.user.name,
+            image: comment.user.image,
+          },
+          replies: [], // 初期表示では空配列
+        })),
+      };
+
+      return serializedMC;
+    });
+
+    // セッション情報も最小限に
+    const optimizedSession =
+      session && user?.id
+        ? {
+            expires: session.expires,
+            user: {
+              id: user.id,
+              name: session.user.name,
+              email: session.user.email,
+              image: session.user.image,
+              isAdmin: user.isAdmin || false,
+            },
+          }
+        : null;
 
     return {
       props: {
         mcs: serializedMcs,
-        session:
-          session && user?.id
-            ? {
-                ...session,
-                user: {
-                  ...session.user,
-                  id: user.id, // nullチェック済みなのでアクセス可能
-                  isAdmin: user.isAdmin || false,
-                },
-              }
-            : null,
+        session: optimizedSession,
       },
     };
   } catch (error) {
