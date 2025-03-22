@@ -89,6 +89,8 @@ model Video {
   channelId   String
   channelTitle String
   viewCount   Int
+  
+  @@map("video")
 }
 
 model video_sengoku {
@@ -211,6 +213,7 @@ model Like {
   createdAt DateTime @default(now())
 
   @@unique([userId, mcId])
+  @@map("like")
 }
 
 model MCComment {
