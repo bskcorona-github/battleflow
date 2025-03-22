@@ -80,7 +80,7 @@ const MCViewer = ({
         <tr className="hover:bg-gray-50">
           <td className="px-6 py-4 whitespace-nowrap">
             <div className="flex items-center">
-              {mc.image ? (
+              {mc.image && mc.image !== "NULL" && mc.image !== "[NULL]" ? (
                 <div className="relative w-10 h-10 mr-3">
                   <Image
                     src={`/images/mcs/${encodeURIComponent(mc.image)}`}
@@ -953,7 +953,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 
     const serializedMcs = mcs.map((mc) => ({
       ...mc,
-      isLiked: session ? mc.likes.length > 0 : false,
+      isLikedByUser: session ? mc.likes.length > 0 : false,
       comments: mc.comments.map((comment: any) => ({
         id: comment.id,
         content: comment.content,

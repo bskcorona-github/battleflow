@@ -1,4 +1,4 @@
-import { Like, Comment } from "@prisma/client";
+import { MC, MCComment, Like } from "@prisma/client";
 
 export type MCFrontend = {
   id: number;
@@ -10,40 +10,18 @@ export type MCFrontend = {
   updatedAt: string;
 };
 
-export type MCWithLikesAndComments = {
-  id: number;
-  name: string;
-  affiliation: string | null;
-  description: string | null;
-  hood: string | null;
-  image: string | null;
-  createdAt: string;
-  updatedAt: string;
-  likesCount: number;
-  isLikedByUser: boolean;
-  likes: {
-    id: number;
-    userId: string;
-    mcId: number;
-    createdAt: string;
-  }[];
-  comments: CommentWithUser[];
-} & {
-  -readonly [K in keyof MCWithLikesAndComments]: MCWithLikesAndComments[K];
-};
-
-export type CommentWithUser = {
-  id: number;
-  content: string;
-  userId: string;
-  mcId: number;
-  createdAt: string;
-  updatedAt: string;
-  parentId: number | null;
-  replies: CommentWithUser[];
+export interface CommentWithUser extends MCComment {
   user: {
+    id: string;
     name: string | null;
-    email: string | null;
     image: string | null;
+    email: string | null;
   };
-};
+  replies?: CommentWithUser[];
+}
+
+export interface MCWithLikesAndComments extends MC {
+  likes: Like[];
+  comments: CommentWithUser[];
+  isLikedByUser: boolean;
+}

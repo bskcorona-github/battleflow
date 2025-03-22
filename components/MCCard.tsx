@@ -92,7 +92,7 @@ export default function MCCard({
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-200 w-[400px] flex flex-col">
       <div className="relative h-[280px] bg-gray-200 flex-shrink-0">
-        {mc.image ? (
+        {mc.image && mc.image !== "NULL" && mc.image !== "[NULL]" ? (
           <Image
             src={`/images/mcs/${encodeURIComponent(mc.image)}`}
             alt={mc.name}

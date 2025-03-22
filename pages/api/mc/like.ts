@@ -22,15 +22,18 @@ export default async function handler(
       return res.status(400).json({ error: "MC ID is required" });
     }
 
-    const parsedMcId = parseInt(mcId);
+    // 数値型に変換
+    const parsedMcId = typeof mcId === "string" ? parseInt(mcId, 10) : mcId;
 
     // トランザクションを使用して処理
     const result = await prisma.$transaction(async (tx) => {
-      // 既存のいいねを確認
-      const existingLike = await tx.like.findFirst({
+      // 既存のいいねを確認 (複合ユニーク制約を使用)
+      const existingLike = await tx.like.findUnique({
         where: {
-          userId: session.user.id,
-          mcId: parsedMcId,
+          userId_mcId: {
+            userId: session.user.id,
+            mcId: parsedMcId,
+          },
         },
       });
 
@@ -38,12 +41,15 @@ export default async function handler(
         // いいねを削除
         await tx.like.delete({
           where: {
-            id: existingLike.id,
+            userId_mcId: {
+              userId: session.user.id,
+              mcId: parsedMcId,
+            },
           },
         });
 
         // MCのlikesCountを減少
-        await tx.mC.update({
+        const updatedMC = await tx.mC.update({
           where: { id: parsedMcId },
           data: {
             likesCount: {
@@ -52,7 +58,11 @@ export default async function handler(
           },
         });
 
-        return { liked: false };
+        return {
+          liked: false,
+          likesCount: updatedMC.likesCount,
+          message: "いいねを取り消しました",
+        };
       }
 
       // いいねを作成
@@ -64,7 +74,7 @@ export default async function handler(
       });
 
       // MCのlikesCountを増加
-      await tx.mC.update({
+      const updatedMC = await tx.mC.update({
         where: { id: parsedMcId },
         data: {
           likesCount: {
@@ -73,20 +83,14 @@ export default async function handler(
         },
       });
 
-      return { liked: true };
+      return {
+        liked: true,
+        likesCount: updatedMC.likesCount,
+        message: "いいねしました",
+      };
     });
 
-    // いいねの総数を取得
-    const likesCount = await prisma.like.count({
-      where: {
-        mcId: parsedMcId,
-      },
-    });
-
-    return res.status(200).json({
-      ...result,
-      likesCount,
-    });
+    return res.status(200).json(result);
   } catch (error) {
     console.error("Error processing like:", error);
     if (error instanceof Error) {
