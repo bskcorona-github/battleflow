@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/update-videos",
-      "schedule": "55 5 * * *"
+      "schedule": "05 6 * * *"
     }
   ]
 }
