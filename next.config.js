@@ -1,15 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
   images: {
     domains: [
-      "lh3.googleusercontent.com", // Google認証用
-      "i.ytimg.com", // YouTubeのサムネイル用
-      "img.youtube.com", // YouTubeのサムネイル用
-      // 他の必要なドメインがあれば追加
+      "lh3.googleusercontent.com",
+      "avatars.githubusercontent.com",
+      "platform-lookaside.fbsbx.com",
+      "i.ytimg.com",
     ],
-    unoptimized: process.env.NODE_ENV === "development",
+    unoptimized: process.env.NODE_ENV === "production",
   },
-  reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
