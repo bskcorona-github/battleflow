@@ -6,14 +6,6 @@
     },
     {
       "path": "/api/cron/update-videos",
-      "schedule": "0 15 * * *"
-    },
-    {
-      "path": "/api/cron/update-videos",
-      "schedule": "0 21 * * *"
-    },
-    {
-      "path": "/api/cron/update-videos",
       "schedule": "55 5 * * *"
     }
   ]
