@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { GetServerSideProps } from "next";
 import { prisma } from "@/lib/prisma";
 import { getSession, useSession } from "next-auth/react";
@@ -13,6 +13,7 @@ import type { CommentWithUser } from "@/types/mc";
 import Link from "next/link";
 import Pagination from "@/components/Pagination";
 import Head from "next/head";
+import SearchBar from "@/components/SearchBar";
 
 type Props = {
   mcs: (MCRank & {
@@ -43,6 +44,26 @@ const sortKeyToScoreKey: Record<SortKey, ScoreKey> = {
   musicality: "musicalityScore",
 };
 
+// サポート関数
+function getSortKeyLabel(key: SortKey): string {
+  switch (key) {
+    case "total":
+      return "総合スコア";
+    case "rhyme":
+      return "韻";
+    case "vibes":
+      return "バイブス";
+    case "flow":
+      return "フロウ";
+    case "dialogue":
+      return "対応力";
+    case "musicality":
+      return "音楽性";
+    default:
+      return key;
+  }
+}
+
 export default function RankingPage({ mcs: initialMcs }: Props) {
   const { data: session } = useSession();
   const [mcs, setMcs] = useState(initialMcs);
@@ -51,16 +72,25 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
   const [selectedChartMC, setSelectedChartMC] = useState<MCRank | null>(null);
   const [isAddMCModalOpen, setIsAddMCModalOpen] = useState(false);
   const [expandedComments, setExpandedComments] = useState<number[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // ページネーション関連の状態
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10; // 1ページに10件表示
 
+  // 検索クエリに基づいてMCをフィルタリングするためのmemo
+  const filteredMCs = useMemo(() => {
+    if (!searchQuery.trim()) return mcs;
+
+    const query = searchQuery.toLowerCase();
+    return mcs.filter((mc) => mc.name.toLowerCase().includes(query));
+  }, [mcs, searchQuery]);
+
   // ソート関数をuseMemo内に移動
   const sortedMCs = useMemo(() => {
     const scoreKey = sortKeyToScoreKey[sortKey];
-    return [...mcs].sort((a, b) => b[scoreKey] - a[scoreKey]);
-  }, [mcs, sortKey]);
+    return [...filteredMCs].sort((a, b) => b[scoreKey] - a[scoreKey]);
+  }, [filteredMCs, sortKey]);
 
   // 現在のページに表示するMCを計算
   const currentMCs = useMemo(() => {
@@ -80,6 +110,16 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
     setCurrentPage(pageNumber);
     // ページが変わったらページトップにスクロール
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // 検索時にページを1に戻す
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // 検索ハンドラー
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
   };
 
   const handleVote = async (
@@ -300,219 +340,206 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
         />
       </Head>
       <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold text-gray-800">MCランキング</h1>
-          <div className="space-x-3">
-            <button
-              onClick={() => setIsAddMCModalOpen(true)}
-              className="px-4 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
-            >
-              MCを追加
-            </button>
-            {/* 管理者用リセットボタン */}
-            {session?.user?.isAdmin && (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleReset}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                >
-                  全投票をリセット
-                </button>
-                <button
-                  onClick={handleResetComments}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                >
-                  全コメントをリセット
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 説明セクションを追加 */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">
-            ランキングの採点方法について
-          </h2>
-          <div className="text-sm text-gray-600 space-y-2">
-            <p>
-              このランキングは、ユーザーの投票とベイズ推定を組み合わせた独自の評価システムを採用しています。
-            </p>
-            <p>
-              <span className="font-medium text-gray-700">
-                • ユーザー投票：
-              </span>
-              各MCに対して、韻、バイブス、フロー、対話、音楽性の5項目を20点満点で評価
-            </p>
-            <p>
-              <span className="font-medium text-gray-700">• ベイズ推定：</span>
-              投票数が少ない場合でも信頼性の高いスコアを算出するため、統計的手法を使用
-            </p>
-            <p>
-              <span className="font-medium text-gray-700">• 総合スコア：</span>
-              5項目の合計スコアをベイズ推定で補正した値（最大100点）
-            </p>
-          </div>
-        </div>
-
-        {/* ソート選択 */}
-        <div className="mb-4">
-          <select
-            value={sortKey}
-            onChange={(e) => {
-              setSortKey(e.target.value as SortKey);
-              setCurrentPage(1); // ソートが変わったら最初のページに戻る
-            }}
-            className="px-3 py-1.5 rounded border bg-white text-gray-900 text-sm"
-          >
-            <option value="total">総合スコア</option>
-            <option value="rhyme">韻</option>
-            <option value="vibes">バイブス</option>
-            <option value="flow">フロー</option>
-            <option value="dialogue">対話</option>
-            <option value="musicality">音楽性</option>
-          </select>
-          <span className="ml-4 text-sm text-gray-600">
-            全 {mcs.length} 件中 {(currentPage - 1) * itemsPerPage + 1} -{" "}
-            {Math.min(currentPage * itemsPerPage, mcs.length)} 件を表示
-          </span>
-        </div>
-
-        {/* ランキング一覧 */}
-        <div className="grid gap-4">
-          {currentMCs.map((mc, index) => (
-            <div key={mc.id} className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl font-bold text-gray-800">
-                    {(currentPage - 1) * itemsPerPage + index + 1}
-                  </span>
-                  <div>
-                    <Link
-                      href={`/mcs#${mc.name}`}
-                      className="inline-flex items-center gap-1 hover:text-blue-600 transition-colors group"
-                    >
-                      <h2 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600">
-                        {mc.name}
-                      </h2>
-                      <svg
-                        className="w-4 h-4 text-gray-400 group-hover:text-blue-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        />
-                      </svg>
-                    </Link>
-                    {/* 投票数を表示 */}
-                    <span className="text-xs text-gray-600">
-                      投票数: {mc.voteCount}票
-                    </span>
-                  </div>
-                </div>
-                {session && !mc.hasVoted && (
+        <div className="space-y-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h1 className="text-2xl font-bold text-black">MCランキング</h1>
+            <div className="flex flex-col md:flex-row gap-3 md:items-center">
+              <SearchBar
+                placeholder="MC名で検索..."
+                onSearch={handleSearch}
+                className="w-full md:w-64"
+              />
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(sortKeyToScoreKey).map((key) => (
                   <button
-                    onClick={() => setSelectedMC(mc.id)}
-                    className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                    key={key}
+                    onClick={() => setSortKey(key as SortKey)}
+                    className={`px-3 py-1.5 rounded text-sm ${
+                      sortKey === key
+                        ? "bg-primary text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
                   >
-                    投票する
+                    {getSortKeyLabel(key as SortKey)}
                   </button>
+                ))}
+                {session?.user?.isAdmin && (
+                  <>
+                    <button
+                      onClick={() => setIsAddMCModalOpen(true)}
+                      className="px-3 py-1.5 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                    >
+                      MC追加
+                    </button>
+                    <button
+                      onClick={handleReset}
+                      className="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+                    >
+                      投票リセット
+                    </button>
+                    <button
+                      onClick={handleResetComments}
+                      className="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+                    >
+                      コメントリセット
+                    </button>
+                  </>
                 )}
               </div>
-
-              {/* スコア表示 */}
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                <div className="text-center p-2 bg-gray-50 rounded">
-                  <div className="text-xs font-medium text-gray-700">
-                    総合スコア
-                  </div>
-                  <div className="text-base font-bold text-gray-900">
-                    {mc.totalScore.toFixed(1)}
-                  </div>
-                </div>
-                <div className="text-center p-2 bg-gray-50 rounded">
-                  <div className="text-xs font-medium text-gray-700">韻</div>
-                  <div className="text-base font-bold text-gray-900">
-                    {mc.rhymeScore.toFixed(1)}
-                  </div>
-                </div>
-                <div className="text-center p-2 bg-gray-50 rounded">
-                  <div className="text-xs font-medium text-gray-700">
-                    バイブス
-                  </div>
-                  <div className="text-base font-bold text-gray-900">
-                    {mc.vibesScore.toFixed(1)}
-                  </div>
-                </div>
-                <div className="text-center p-2 bg-gray-50 rounded">
-                  <div className="text-xs font-medium text-gray-700">
-                    フロー
-                  </div>
-                  <div className="text-base font-bold text-gray-900">
-                    {mc.flowScore.toFixed(1)}
-                  </div>
-                </div>
-                <div className="text-center p-2 bg-gray-50 rounded">
-                  <div className="text-xs font-medium text-gray-700">対話</div>
-                  <div className="text-base font-bold text-gray-900">
-                    {mc.dialogueScore.toFixed(1)}
-                  </div>
-                </div>
-                <div className="text-center p-2 bg-gray-50 rounded">
-                  <div className="text-xs font-medium text-gray-700">
-                    音楽性
-                  </div>
-                  <div className="text-base font-bold text-gray-900">
-                    {mc.musicalityScore.toFixed(1)}
-                  </div>
-                </div>
-              </div>
-
-              {/* チャート表示ボタン */}
-              <div className="mt-3 flex justify-center">
-                <button
-                  onClick={() => setSelectedChartMC(mc)}
-                  className="px-3 py-1.5 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition-colors"
-                >
-                  スコアチャートを表示
-                </button>
-              </div>
-
-              {/* 投票フォーム */}
-              {selectedMC === mc.id && (
-                <div className="mt-4">
-                  <RankingVoteForm
-                    mcId={mc.id}
-                    onSubmit={(scores) => handleVote(mc.id, scores)}
-                  />
-                </div>
-              )}
-
-              {/* コメントセクション */}
-              <div className="mt-4 border-t pt-4">
-                <h3 className="text-lg font-medium text-gray-900 mb-3">
-                  コメント
-                </h3>
-                <MCComment
-                  mcId={mc.id}
-                  comments={mc.comments}
-                  onCommentAdded={handleCommentAdded}
-                  onCommentUpdated={(commentId, newContent) =>
-                    handleCommentUpdated(mc.id, commentId, newContent)
-                  }
-                  onCommentDeleted={(commentId) =>
-                    handleCommentDeleted(mc.id, commentId)
-                  }
-                  type="ranking"
-                />
-              </div>
             </div>
-          ))}
+          </div>
+
+          {currentMCs.length > 0 ? (
+            <div className="grid grid-cols-1 gap-6">
+              {currentMCs.map((mc, index) => (
+                <div key={mc.id} className="bg-white rounded-lg shadow p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl font-bold text-gray-800">
+                        {(currentPage - 1) * itemsPerPage + index + 1}
+                      </span>
+                      <div>
+                        <Link
+                          href={`/mcs#${mc.name}`}
+                          className="inline-flex items-center gap-1 hover:text-blue-600 transition-colors group"
+                        >
+                          <h2 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600">
+                            {mc.name}
+                          </h2>
+                          <svg
+                            className="w-4 h-4 text-gray-400 group-hover:text-blue-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                            />
+                          </svg>
+                        </Link>
+                        {/* 投票数を表示 */}
+                        <span className="text-xs text-gray-600">
+                          投票数: {mc.voteCount}票
+                        </span>
+                      </div>
+                    </div>
+                    {session && !mc.hasVoted && (
+                      <button
+                        onClick={() => setSelectedMC(mc.id)}
+                        className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                      >
+                        投票する
+                      </button>
+                    )}
+                  </div>
+
+                  {/* スコア表示 */}
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                    <div className="text-center p-2 bg-gray-50 rounded">
+                      <div className="text-xs font-medium text-gray-700">
+                        総合スコア
+                      </div>
+                      <div className="text-base font-bold text-gray-900">
+                        {mc.totalScore.toFixed(1)}
+                      </div>
+                    </div>
+                    <div className="text-center p-2 bg-gray-50 rounded">
+                      <div className="text-xs font-medium text-gray-700">
+                        韻
+                      </div>
+                      <div className="text-base font-bold text-gray-900">
+                        {mc.rhymeScore.toFixed(1)}
+                      </div>
+                    </div>
+                    <div className="text-center p-2 bg-gray-50 rounded">
+                      <div className="text-xs font-medium text-gray-700">
+                        バイブス
+                      </div>
+                      <div className="text-base font-bold text-gray-900">
+                        {mc.vibesScore.toFixed(1)}
+                      </div>
+                    </div>
+                    <div className="text-center p-2 bg-gray-50 rounded">
+                      <div className="text-xs font-medium text-gray-700">
+                        フロー
+                      </div>
+                      <div className="text-base font-bold text-gray-900">
+                        {mc.flowScore.toFixed(1)}
+                      </div>
+                    </div>
+                    <div className="text-center p-2 bg-gray-50 rounded">
+                      <div className="text-xs font-medium text-gray-700">
+                        対話
+                      </div>
+                      <div className="text-base font-bold text-gray-900">
+                        {mc.dialogueScore.toFixed(1)}
+                      </div>
+                    </div>
+                    <div className="text-center p-2 bg-gray-50 rounded">
+                      <div className="text-xs font-medium text-gray-700">
+                        音楽性
+                      </div>
+                      <div className="text-base font-bold text-gray-900">
+                        {mc.musicalityScore.toFixed(1)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* チャート表示ボタン */}
+                  <div className="mt-3 flex justify-center">
+                    <button
+                      onClick={() => setSelectedChartMC(mc)}
+                      className="px-3 py-1.5 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition-colors"
+                    >
+                      スコアチャートを表示
+                    </button>
+                  </div>
+
+                  {/* 投票フォーム */}
+                  {selectedMC === mc.id && (
+                    <div className="mt-4">
+                      <RankingVoteForm
+                        mcId={mc.id}
+                        onSubmit={(scores) => handleVote(mc.id, scores)}
+                      />
+                    </div>
+                  )}
+
+                  {/* コメントセクション */}
+                  <div className="mt-4 border-t pt-4">
+                    <h3 className="text-lg font-medium text-gray-900 mb-3">
+                      コメント
+                    </h3>
+                    <MCComment
+                      mcId={mc.id}
+                      comments={mc.comments}
+                      onCommentAdded={handleCommentAdded}
+                      onCommentUpdated={(commentId, newContent) =>
+                        handleCommentUpdated(mc.id, commentId, newContent)
+                      }
+                      onCommentDeleted={(commentId) =>
+                        handleCommentDeleted(mc.id, commentId)
+                      }
+                      type="ranking"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10">
+              {searchQuery ? (
+                <p className="text-gray-500">
+                  「{searchQuery}」に一致するMCが見つかりませんでした。
+                </p>
+              ) : (
+                <p className="text-gray-500">MCが見つかりませんでした。</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ページネーションコンポーネント */}

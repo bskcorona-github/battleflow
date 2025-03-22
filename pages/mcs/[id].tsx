@@ -7,7 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import DOMPurify from "isomorphic-dompurify";
 import type { MCWithLikesAndComments, CommentWithUser } from "@/types/mc";
-import { getSession /* , useSession */ } from "next-auth/react";
+import { getSession, useSession, signIn } from "next-auth/react";
 import { toast } from "react-hot-toast";
 
 type Props = {
@@ -26,10 +26,11 @@ type Props = {
 export default function MCDetail({ mc, session }: Props) {
   // const _router = useRouter();
   // const { data: _sessionData } = useSession();
-  const [likes, setLikes] = useState(mc.likes ? mc.likes.length : 0);
-  const [isLiked, setIsLiked] = useState(
-    mc.likes && mc.likes.some((like) => like.userId === session?.user?.id)
-  );
+  const { data: sessionData } = useSession();
+  const currentSession = sessionData || session;
+
+  const [likes, setLikes] = useState(mc.likesCount || 0);
+  const [isLiked, setIsLiked] = useState(mc.isLikedByUser || false);
   const [comments, setComments] = useState<CommentWithUser[]>(
     mc.comments as CommentWithUser[]
   );
@@ -40,19 +41,25 @@ export default function MCDetail({ mc, session }: Props) {
   };
 
   const handleLike = async () => {
-    if (!session) {
+    if (!currentSession) {
       toast.error("いいねするにはログインが必要です");
+      signIn();
       return;
     }
 
     try {
-      const response = await fetch(`/api/mcs/${mc.id}/like`, {
+      const response = await fetch(`/api/mc/like`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ mcId: mc.id }),
       });
 
       if (response.ok) {
-        setIsLiked(!isLiked);
-        setLikes(isLiked ? likes - 1 : likes + 1);
+        const data = await response.json();
+        setIsLiked(data.liked);
+        setLikes(data.likesCount);
         toast.success(isLiked ? "いいねを取り消しました" : "いいねしました");
       }
     } catch (error) {
@@ -62,25 +69,38 @@ export default function MCDetail({ mc, session }: Props) {
   };
 
   const handleComment = async (content: string) => {
-    if (!session) {
+    if (!currentSession) {
       toast.error("コメントするにはログインが必要です");
+      signIn();
       return null;
     }
 
     try {
-      const response = await fetch(`/api/mcs/${mc.id}/comment`, {
+      const response = await fetch(`/api/mcs/comment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ mcId: mc.id, content }),
       });
 
       if (response.ok) {
         const newComment = await response.json();
-        setComments([...comments, newComment]);
+
+        const commentWithUser = {
+          ...newComment,
+          user: {
+            id: currentSession.user?.id,
+            name: currentSession.user?.name,
+            email: currentSession.user?.email,
+            image: currentSession.user?.image,
+          },
+          replies: [],
+        };
+
+        setComments([commentWithUser, ...comments]);
         toast.success("コメントを投稿しました");
-        return newComment;
+        return commentWithUser;
       }
     } catch (error) {
       console.error("Error commenting:", error);
@@ -151,14 +171,14 @@ export default function MCDetail({ mc, session }: Props) {
                 ホーム
               </Link>
             </li>
-            <li className="text-gray-500">/</li>
+            <li className="text-black">/</li>
             <li>
               <Link href="/mcs" className="text-blue-500 hover:underline">
                 MC一覧
               </Link>
             </li>
-            <li className="text-gray-500">/</li>
-            <li className="text-gray-700">{mc.name}</li>
+            <li className="text-black">/</li>
+            <li className="text-black">{mc.name}</li>
           </ol>
         </nav>
 
@@ -181,18 +201,20 @@ export default function MCDetail({ mc, session }: Props) {
                 )}
               </div>
               <div className="md:w-2/3 md:pl-8">
-                <h1 className="text-3xl font-bold mb-2">{mc.name}</h1>
+                <h1 className="text-3xl font-bold mb-2 text-black">
+                  {mc.name}
+                </h1>
                 <div className="flex items-center mb-4">
                   {mc.hood && (
                     <div className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm mr-3">
                       {mc.hood}
                     </div>
                   )}
-                  <div className="flex items-center text-gray-600 mr-4">
+                  <div className="flex items-center text-black mr-4">
                     <span className="mr-1">👍</span>
                     <span>{likes}</span>
                   </div>
-                  <div className="flex items-center text-gray-600">
+                  <div className="flex items-center text-black">
                     <span className="mr-1">💬</span>
                     <span>{comments.length}</span>
                   </div>
@@ -200,9 +222,11 @@ export default function MCDetail({ mc, session }: Props) {
 
                 {mc.description && (
                   <div className="mb-6">
-                    <h2 className="text-xl font-semibold mb-2">プロフィール</h2>
+                    <h2 className="text-xl font-semibold mb-2 text-black">
+                      プロフィール
+                    </h2>
                     <div
-                      className="text-gray-700 leading-relaxed"
+                      className="text-black leading-relaxed"
                       dangerouslySetInnerHTML={createSanitizedHTML(
                         mc.description
                       )}
@@ -216,7 +240,7 @@ export default function MCDetail({ mc, session }: Props) {
                     className={`px-4 py-2 rounded-md mr-3 ${
                       isLiked
                         ? "bg-red-100 text-red-600 border border-red-200"
-                        : "bg-gray-100 text-gray-600 border border-gray-200"
+                        : "bg-gray-100 text-black border border-gray-200"
                     }`}
                   >
                     👍 {isLiked ? "いいね済み" : "いいね"}
@@ -226,10 +250,10 @@ export default function MCDetail({ mc, session }: Props) {
             </div>
 
             <div className="mt-8">
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="text-xl font-semibold mb-4 text-black">
                 コメント ({comments.length})
               </h2>
-              {session ? (
+              {currentSession ? (
                 <div className="mb-6">
                   <form
                     onSubmit={async (e) => {
@@ -246,63 +270,65 @@ export default function MCDetail({ mc, session }: Props) {
                   >
                     <textarea
                       name="content"
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
                       rows={3}
                       placeholder="コメントを入力..."
                       required
                     ></textarea>
                     <button
                       type="submit"
-                      className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                     >
-                      投稿する
+                      コメントを投稿
                     </button>
                   </form>
                 </div>
               ) : (
-                <p className="mb-6 p-4 bg-gray-50 rounded-lg text-center">
-                  コメントするには
-                  <Link
-                    href="/api/auth/signin"
-                    className="text-blue-600 hover:underline mx-1"
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <p className="text-black mb-2">
+                    コメントするにはログインが必要です
+                  </p>
+                  <button
+                    onClick={() => signIn()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     ログイン
-                  </Link>
-                  してください
-                </p>
+                  </button>
+                </div>
               )}
 
               <div className="space-y-4">
-                {comments.length > 0 ? (
-                  comments.map((comment) => (
-                    <div key={comment.id} className="bg-gray-50 p-4 rounded-lg">
-                      <div className="flex items-center mb-2">
-                        {comment.user?.image && (
-                          <Image
-                            src={comment.user.image}
-                            alt={comment.user.name || "User"}
-                            width={32}
-                            height={32}
-                            className="rounded-full mr-2"
-                          />
-                        )}
-                        <div>
-                          <p className="font-medium">
-                            {comment.user?.name || "匿名ユーザー"}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {new Date(comment.createdAt).toLocaleString(
-                              "ja-JP"
-                            )}
-                          </p>
+                {comments.map((comment) => (
+                  <div key={comment.id} className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex items-center mb-2">
+                      {comment.user.image && (
+                        <Image
+                          src={comment.user.image}
+                          alt={comment.user.name || "User"}
+                          width={32}
+                          height={32}
+                          className="rounded-full mr-3"
+                          unoptimized
+                        />
+                      )}
+                      <div>
+                        <div className="font-medium text-black">
+                          {comment.user.name || "Anonymous"}
+                        </div>
+                        <div className="text-xs text-black">
+                          {new Date(comment.createdAt).toLocaleString()}
                         </div>
                       </div>
-                      <p className="text-gray-700">{comment.content}</p>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 text-center py-4">
-                    まだコメントはありません
+                    <p className="text-black whitespace-pre-wrap">
+                      {comment.content}
+                    </p>
+                  </div>
+                ))}
+
+                {comments.length === 0 && (
+                  <p className="text-black italic">
+                    まだコメントはありません。最初のコメントを投稿しましょう！
                   </p>
                 )}
               </div>
@@ -315,42 +341,51 @@ export default function MCDetail({ mc, session }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
-  const { id } = context.params!;
+  const { id } = context.params as { id: string };
   const session = await getSession(context);
 
   try {
+    let user = null;
+    if (session?.user?.email) {
+      user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      });
+    }
+
     const mc = await prisma.mC.findUnique({
-      where: {
-        id: Number(id),
-      },
-      include: {
-        likes: true,
+      where: { id: parseInt(id) },
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        description: true,
+        hood: true,
+        affiliation: true,
+        likesCount: true,
+        likes: user
+          ? {
+              where: { userId: user.id },
+              select: { id: true },
+              take: 1,
+            }
+          : undefined,
         comments: {
-          include: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
             user: {
               select: {
                 id: true,
                 name: true,
                 image: true,
+                email: true,
               },
             },
-            replies: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    image: true,
-                  },
-                },
-              },
-              orderBy: {
-                createdAt: "asc",
-              },
-            },
-          },
-          orderBy: {
-            createdAt: "desc",
           },
         },
       },
@@ -362,14 +397,41 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       };
     }
 
+    const optimizedSession = session
+      ? {
+          expires: session.expires,
+          user: {
+            ...session.user,
+            id: user?.id || null,
+          },
+        }
+      : null;
+
+    const serializedMc = {
+      id: mc.id,
+      name: mc.name,
+      image: mc.image,
+      description: mc.description,
+      hood: mc.hood,
+      affiliation: mc.affiliation,
+      likesCount: mc.likesCount,
+      likes: null,
+      isLikedByUser: user ? mc.likes && mc.likes.length > 0 : false,
+      comments: mc.comments.map((comment) => ({
+        ...comment,
+        createdAt: comment.createdAt.toISOString(),
+        updatedAt: comment.updatedAt.toISOString(),
+      })),
+    };
+
     return {
       props: {
-        mc: JSON.parse(JSON.stringify(mc)),
-        session,
+        mc: serializedMc,
+        session: optimizedSession,
       },
     };
   } catch (error) {
-    console.error("Error fetching MC:", error);
+    console.error("Error fetching MC details:", error);
     return {
       notFound: true,
     };

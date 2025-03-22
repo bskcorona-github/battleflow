@@ -94,7 +94,7 @@ const SEARCH_KEYWORDS = [
 
 // 表示件数のオプション
 const ITEMS_PER_PAGE_OPTIONS = {
-  board: [12, 24, 36], // 3の倍数
+  board: [12, 24, 36], // 常に12個の倍数を使用
   table: [10, 20, 50],
 } as const;
 
@@ -117,6 +117,7 @@ export default function Battles() {
     SEARCH_KEYWORDS[0]
   );
   const [videos, setVideos] = useState<Video[]>([]);
+  const [allVideos, setAllVideos] = useState<Video[]>([]); // 全てのビデオを保持
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -166,73 +167,71 @@ export default function Battles() {
   useEffect(() => {
     // キーワードが変更されたら、ページをリセットする
     setPage(1);
-
-    // 変更後にビデオを取得する処理は別のuseEffectで行う
-    // これにより、selectedKeywordが変更された後、確実にページが1にリセットされてからビデオが取得される
   }, [selectedKeyword]);
 
-  // ビデオデータ取得のuseEffect
+  // ページまたは表示件数が変更されたときに表示するビデオを更新
   useEffect(() => {
-    const fetchVideos = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        console.log(
-          `Fetching videos for tab: ${selectedKeyword.name}, channel: ${selectedKeyword.channelId}`
-        );
+    updateDisplayedVideos();
+  }, [page, itemsPerPage, allVideos]);
 
-        // キャッシュを完全に無効化するためにタイムスタンプを利用
-        const timestamp = Date.now();
+  // タイムスタンプを使ってキャッシュを防止
+  useEffect(() => {
+    if (isMounted) {
+      fetchVideos();
+    }
+  }, [selectedKeyword, sortOrder, isMounted]);
 
-        // URLにタブ情報を含める
-        const url = `/api/videos?channelId=${encodeURIComponent(
-          selectedKeyword.channelId || ""
-        )}&keyword=${encodeURIComponent(
-          selectedKeyword.query
-        )}&sort=${sortOrder}&page=${page}&limit=${itemsPerPage}&tab=${
-          selectedKeyword.name
-        }&_t=${timestamp}`;
+  // 表示するビデオを更新する関数
+  const updateDisplayedVideos = () => {
+    if (allVideos.length === 0) return;
 
-        console.log(`Requesting URL: ${url}`);
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedVideos = allVideos.slice(startIndex, endIndex);
 
-        const response = await fetch(url);
-        let data: ApiResponse;
+    setVideos(paginatedVideos);
 
-        try {
-          data = await response.json();
-        } catch (e) {
-          console.error("JSON parse error:", e);
-          throw new Error("レスポンスの解析に失敗しました");
-        }
+    // ページネーション情報を更新
+    setPaginationInfo({
+      total: allVideos.length,
+      currentPage: page,
+      totalPages: Math.ceil(allVideos.length / itemsPerPage),
+      hasNextPage: endIndex < allVideos.length,
+      hasPreviousPage: page > 1,
+    });
+  };
 
-        if (!response.ok) {
-          throw new Error(`API error: ${data.error || "Unknown error"}`);
-        }
+  // ビデオを取得する関数
+  const fetchVideos = async () => {
+    setLoading(true);
+    setError(null);
 
-        // デバッグ用ログ
-        console.log(
-          `Loaded ${data.videos?.length || 0} videos for tab: ${
-            selectedKeyword.name
-          }`
-        );
+    try {
+      // タイムスタンプを追加してキャッシュを防止
+      const timestamp = Date.now();
+      const response = await fetch(
+        `/api/videos?keyword=${selectedKeyword.name}&query=${selectedKeyword.query}&channelId=${selectedKeyword.channelId}&sortOrder=${sortOrder}&timestamp=${timestamp}`
+      );
 
-        // 状態を更新
-        setVideos(data.videos || []);
-        setPaginationInfo(data.pagination || null);
-      } catch (error) {
-        console.error("Error fetching videos:", error);
-        setError(
-          error instanceof Error ? error.message : "動画の取得に失敗しました"
-        );
-        setVideos([]);
-      } finally {
-        setLoading(false);
+      const data: ApiResponse = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "動画の取得に失敗しました");
       }
-    };
 
-    // ビデオデータを取得
-    fetchVideos();
-  }, [selectedKeyword, sortOrder, page, itemsPerPage]);
+      setAllVideos(data.videos); // すべてのビデオを保存
+      updateDisplayedVideos(); // 表示するビデオを更新
+    } catch (error) {
+      console.error("Error fetching videos:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "動画の取得中にエラーが発生しました"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleManualUpdate = async () => {
     try {
@@ -305,36 +304,97 @@ export default function Battles() {
   const Pagination = () => {
     if (!paginationInfo) return null;
 
-    const { currentPage, totalPages, hasNextPage, hasPreviousPage } =
-      paginationInfo;
+    // 表示するページ番号の数を制限
+    const getPageNumbers = () => {
+      const totalPages = paginationInfo.totalPages;
+      const currentPage = paginationInfo.currentPage;
+      const range = 2; // 現在のページの前後に表示するページ数
+
+      let start = Math.max(1, currentPage - range);
+      let end = Math.min(totalPages, currentPage + range);
+
+      // 表示するページ番号が少ない場合、範囲を調整
+      if (end - start < range * 2) {
+        if (start === 1) {
+          end = Math.min(totalPages, start + range * 2);
+        } else if (end === totalPages) {
+          start = Math.max(1, end - range * 2);
+        }
+      }
+
+      return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    };
 
     return (
-      <div className="flex justify-center items-center gap-2 mt-8">
-        <button
-          onClick={() => setPage(currentPage - 1)}
-          disabled={!hasPreviousPage}
-          className={`px-4 py-2 rounded-full ${
-            hasPreviousPage
-              ? "bg-white text-gray-700 hover:bg-gray-100"
-              : "bg-gray-100 text-gray-400 cursor-not-allowed"
-          } transition-colors`}
-        >
-          前へ
-        </button>
-        <span className="text-gray-600">
-          {currentPage} / {totalPages}ページ
-        </span>
-        <button
-          onClick={() => setPage(currentPage + 1)}
-          disabled={!hasNextPage}
-          className={`px-4 py-2 rounded-full ${
-            hasNextPage
-              ? "bg-white text-gray-700 hover:bg-gray-100"
-              : "bg-gray-100 text-gray-400 cursor-not-allowed"
-          } transition-colors`}
-        >
-          次へ
-        </button>
+      <div className="flex justify-center mt-8">
+        <div className="flex">
+          {/* 最初のページへのボタン */}
+          <button
+            onClick={() => setPage(1)}
+            disabled={!paginationInfo.hasPreviousPage}
+            className={`mx-1 px-3 py-1 rounded ${
+              !paginationInfo.hasPreviousPage
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                : "bg-white text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            &laquo;
+          </button>
+
+          {/* 前のページへのボタン */}
+          <button
+            onClick={() => setPage(paginationInfo.currentPage - 1)}
+            disabled={!paginationInfo.hasPreviousPage}
+            className={`mx-1 px-3 py-1 rounded ${
+              !paginationInfo.hasPreviousPage
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                : "bg-white text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            &lsaquo;
+          </button>
+
+          {/* ページ番号ボタン */}
+          {getPageNumbers().map((pageNum) => (
+            <button
+              key={pageNum}
+              onClick={() => setPage(pageNum)}
+              className={`mx-1 px-3 py-1 rounded ${
+                pageNum === paginationInfo.currentPage
+                  ? "bg-primary text-white"
+                  : "bg-white text-gray-700 hover:bg-gray-100"
+              }`}
+            >
+              {pageNum}
+            </button>
+          ))}
+
+          {/* 次のページへのボタン */}
+          <button
+            onClick={() => setPage(paginationInfo.currentPage + 1)}
+            disabled={!paginationInfo.hasNextPage}
+            className={`mx-1 px-3 py-1 rounded ${
+              !paginationInfo.hasNextPage
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                : "bg-white text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            &rsaquo;
+          </button>
+
+          {/* 最後のページへのボタン */}
+          <button
+            onClick={() => setPage(paginationInfo.totalPages)}
+            disabled={!paginationInfo.hasNextPage}
+            className={`mx-1 px-3 py-1 rounded ${
+              !paginationInfo.hasNextPage
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                : "bg-white text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            &raquo;
+          </button>
+        </div>
       </div>
     );
   };
@@ -362,7 +422,7 @@ export default function Battles() {
       {videos.map((video) => (
         <div
           key={video.id}
-          className="bg-white rounded-lg shadow-md overflow-hidden"
+          className="bg-white rounded-lg shadow overflow-hidden"
         >
           <div
             className="cursor-pointer"
@@ -388,7 +448,7 @@ export default function Battles() {
             </div>
           </div>
           <div className="p-4">
-            <h3 className="text-lg font-semibold mb-2 line-clamp-2 text-black">
+            <h3 className="text-lg font-semibold mb-2 line-clamp-2 text-gray-900">
               {video.title}
             </h3>
             <div className="flex justify-between text-sm text-gray-600">
@@ -400,11 +460,11 @@ export default function Battles() {
             </div>
           </div>
           {expandedVideoId === video.id && (
-            <div className="p-4">
+            <div className="p-4 bg-gray-50 border-t">
               <YouTube
                 videoId={video.id}
                 opts={opts}
-                className="w-full"
+                className="w-full aspect-video"
                 onEnd={() => setExpandedVideoId(null)}
               />
             </div>
@@ -414,52 +474,49 @@ export default function Battles() {
     </div>
   );
 
-  // renderTableViewもコンポーネント内に移動
+  // renderTableViewの修正 - 順序の修正
   const renderTableView = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full bg-white">
+    <div className="overflow-x-auto bg-white rounded-lg shadow">
+      <table className="min-w-full">
         <thead>
-          <tr className="bg-gray-50">
-            <th className="px-6 py-4 text-left text-sm font-bold text-gray-800">
+          <tr className="bg-gray-50 border-b">
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               サムネイル
             </th>
-            <th className="px-6 py-4 text-left text-sm font-bold text-gray-800 whitespace-nowrap">
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               タイトル
             </th>
-            <th className="px-6 py-4 text-left text-sm font-bold text-gray-800 whitespace-nowrap">
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              チャンネル
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               公開日
             </th>
-            <th className="px-6 py-4 text-left text-sm font-bold text-gray-800 whitespace-nowrap">
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               再生回数
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-gray-200">
           {videos.map((video) => (
-            <tr key={video.id} className="border-b">
+            <tr key={video.id} className="hover:bg-gray-50">
               <td className="py-4 px-6">
                 <div
-                  className="flex items-center space-x-4 cursor-pointer"
+                  className="flex items-center cursor-pointer"
                   onClick={() => handleVideoClick(video.id)}
                 >
-                  <div className="relative w-40 aspect-video">
+                  <div className="relative w-32 aspect-video">
                     <Image
                       src={video.thumbnail}
                       alt={video.title}
                       fill
-                      sizes="160px"
+                      sizes="128px"
                       className="object-cover rounded"
                     />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-medium text-black">{video.title}</h3>
-                    <p className="text-sm text-gray-500">
-                      {video.channelTitle}
-                    </p>
-                  </div>
                 </div>
                 {expandedVideoId === video.id && (
-                  <div className="mt-4">
+                  <div className="mt-4 bg-gray-50 p-4 rounded">
                     <YouTube
                       videoId={video.id}
                       opts={opts}
@@ -469,11 +526,17 @@ export default function Battles() {
                   </div>
                 )}
               </td>
+              <td className="py-4 px-6 text-sm text-gray-800 max-w-sm truncate">
+                {video.title}
+              </td>
               <td className="py-4 px-6 text-sm text-gray-500">
-                {video.viewCount}回視聴
+                {video.channelTitle}
               </td>
               <td className="py-4 px-6 text-sm text-gray-500">
                 {new Date(video.publishedAt).toLocaleDateString()}
+              </td>
+              <td className="py-4 px-6 text-sm text-gray-500">
+                {video.viewCount}回視聴
               </td>
             </tr>
           ))}
@@ -504,11 +567,14 @@ export default function Battles() {
             {SEARCH_KEYWORDS.map((keyword) => (
               <button
                 key={keyword.name}
-                onClick={() => setSelectedKeyword(keyword)}
-                className={`px-4 py-2 rounded-full ${
+                onClick={() => {
+                  setSelectedKeyword(keyword);
+                  setPage(1); // 選択変更時にページを1に戻す
+                }}
+                className={`px-3 py-1.5 rounded ${
                   selectedKeyword.name === keyword.name
-                    ? "bg-purple-600 text-white"
-                    : "bg-white text-gray-700 hover:bg-gray-100"
+                    ? "bg-primary text-white"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                 } transition-colors`}
               >
                 {keyword.name}
@@ -517,7 +583,7 @@ export default function Battles() {
           </div>
 
           {/* 表示オプション選択 */}
-          <div className="flex gap-4 justify-center items-center">
+          <div className="flex flex-col md:flex-row gap-4 justify-center items-center">
             {/* ソート順選択 */}
             <div className="flex items-center gap-2">
               <label htmlFor="sort" className="text-gray-700">
@@ -527,7 +593,7 @@ export default function Battles() {
                 id="sort"
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -546,7 +612,7 @@ export default function Battles() {
                 id="viewType"
                 value={viewType}
                 onChange={(e) => setViewType(e.target.value as ViewType)}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {VIEW_TYPE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -568,7 +634,7 @@ export default function Battles() {
                   setItemsPerPage(Number(e.target.value));
                   setPage(1);
                 }}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {(viewType === "board"
                   ? ITEMS_PER_PAGE_OPTIONS.board
@@ -585,7 +651,7 @@ export default function Battles() {
 
         {loading ? (
           <div className="text-center py-8">
-            <div className="animate-spin h-8 w-8 border-4 border-purple-500 border-t-transparent rounded-full mx-auto"></div>
+            <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
           </div>
         ) : error ? (
           <div className="text-center py-8 text-red-600">
@@ -601,7 +667,7 @@ export default function Battles() {
         {isAdmin && (
           <button
             onClick={handleManualUpdate}
-            className="fixed bottom-4 right-4 bg-purple-600 text-white px-4 py-2 rounded-full shadow-lg"
+            className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded shadow-lg"
           >
             動画情報を更新
           </button>

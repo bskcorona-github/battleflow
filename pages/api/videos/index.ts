@@ -65,6 +65,19 @@ function getTableModel(
   return prisma[tableName] as unknown as PrismaModel;
 }
 
+// テーブル名の配列
+const ALL_TABLE_NAMES: TableName[] = [
+  "video_sengoku",
+  "video_umb",
+  "video_kok",
+  "video_ng",
+  "video_gaisen",
+  "video_adrenaline",
+  "video_fsl",
+  "video_batou",
+  "video_kuchigenka",
+];
+
 // BATTLE SUMMIT専用のチャンネル
 const BATTLE_SUMMIT_CHANNELS = [
   "UC15ebOqdhmvl1eb0s0jk5aw",
@@ -81,7 +94,7 @@ const BATTLE_SUMMIT_CHANNELS = [
   "UC2UCB_L3Kh6Kv5pL3pJZFlA",
 ];
 
-// キャッシュ機能を無効化（常に最新データを取得するため）
+// キャッシュ機能の無効化（常に最新データを取得するため）
 const CACHE_DURATION = 0; // キャッシュを無効化
 
 interface CacheItem {
@@ -96,8 +109,15 @@ const videoCache: Record<string, CacheItem> = {};
 const getCacheKey = (
   queryOptions: any,
   tabName: string,
-  channelId: string
+  channelId: string,
+  timestamp?: string
 ): string => {
+  // タイムスタンプがある場合はキャッシュを無効化
+  if (timestamp) {
+    return `${tabName}-${channelId}-${JSON.stringify(
+      queryOptions
+    )}-${timestamp}`;
+  }
   return `${tabName}-${channelId}-${JSON.stringify(queryOptions)}`;
 };
 
@@ -113,17 +133,36 @@ export default async function handler(
   res: NextApiResponse
 ) {
   const {
-    channelId,
-    keyword,
-    sort = "views",
+    channelId = "",
+    query = "vs",
+    keyword = "戦極",
+    sortOrder = "views",
     page = "1",
-    limit = "10",
-    tab = "", // タブ名を追加
+    limit = "12",
+    timestamp,
   } = req.query;
-  const currentPage = parseInt(page as string, 10);
-  const itemsPerPage = parseInt(limit as string, 10);
+
+  const currentPage = parseInt(typeof page === "string" ? page : "1", 10);
+  const itemsPerPage = parseInt(typeof limit === "string" ? limit : "12", 10);
+
+  // ソート順の設定
+  const sort =
+    sortOrder === "date_asc"
+      ? "date_asc"
+      : sortOrder === "date_desc"
+      ? "date_desc"
+      : "views";
 
   try {
+    // デバッグ用：すべてのテーブルの件数をカウント
+    const counts = await Promise.all(
+      ALL_TABLE_NAMES.map(async (table) => {
+        const count = await prisma[table].count();
+        return { table, count };
+      })
+    );
+    console.log("データベーステーブル件数:", counts);
+
     // BATTLE SUMMITの場合は特別な処理
     if (keyword === "BATTLE SUMMIT") {
       // まず全件を取得
@@ -153,14 +192,14 @@ export default async function handler(
         );
       });
 
-      const totalCount = filteredVideos.length;
-      const videos = filteredVideos.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
+      console.log(
+        `BATTLE SUMMIT: 全${allVideos.length}件中${filteredVideos.length}件を抽出`
       );
 
+      const totalCount = filteredVideos.length;
+      // クライアント側でページネーションを行うため、全データを返す
       return res.status(200).json({
-        videos,
+        videos: filteredVideos,
         pagination: {
           total: totalCount,
           currentPage,
@@ -184,30 +223,44 @@ export default async function handler(
       });
     }
 
-    const tableName = CHANNEL_TABLES[channelId];
+    const tableName = CHANNEL_TABLES[channelId as string];
 
-    // クエリオプションを作成
-    const queryOptions: QueryOptions = {
-      orderBy:
-        sort === "views"
-          ? { viewCount: "desc" }
-          : sort === "date_desc"
-          ? { publishedAt: "desc" }
-          : { publishedAt: "asc" },
-      skip: (currentPage - 1) * itemsPerPage,
-      take: itemsPerPage,
-    };
+    // KOKとNGの場合は特別処理 (テーブル名を直接確認)
+    console.log(
+      `リクエストされたテーブル: ${tableName} (チャンネルID: ${channelId})`
+    );
+
+    // KOKとNGのテーブルに直接アクセスして件数を確認
+    if (tableName === "video_kok") {
+      console.log(`KOKテーブル直接カウント: ${await prisma.video_kok.count()}`);
+    } else if (tableName === "video_ng") {
+      console.log(`NGテーブル直接カウント: ${await prisma.video_ng.count()}`);
+    }
+
+    // クエリのpaginationを削除して全件取得するよう変更
+    const orderByOptions =
+      sort === "views"
+        ? { viewCount: "desc" as const }
+        : sort === "date_desc"
+        ? { publishedAt: "desc" as const }
+        : { publishedAt: "asc" as const };
 
     // 動的にテーブルを選択してデータを取得（型安全に）
     const model = getTableModel(prisma, tableName);
     const totalCount = await model.count();
+    console.log(`テーブル ${tableName} の総件数: ${totalCount}件`);
 
     if (req.method === "GET") {
       // タブ名を取得（リクエストから）
-      const tabName = typeof tab === "string" ? tab : "";
+      const tabName = typeof query === "string" ? query : "";
 
       // タブ名を含めたキャッシュキーを生成
-      const cacheKey = getCacheKey(queryOptions, tabName, channelId as string);
+      const cacheKey = getCacheKey(
+        { orderBy: orderByOptions },
+        tabName,
+        channelId as string,
+        timestamp as string | undefined
+      );
 
       // デバッグログ
       console.log(`Request for tab: ${tabName}, channel: ${channelId}`);
@@ -215,13 +268,50 @@ export default async function handler(
       // キャッシュが有効であれば利用（ただし現在は無効化中）
       if (isCacheValid(cacheKey)) {
         console.log(`Using cached videos data for tab: ${tabName}`);
+
+        // キャッシュからデータを取得
+        const cachedVideos = videoCache[cacheKey].data;
+
+        // キャッシュデータにもフィルタリングを適用
+        let filteredCachedVideos = cachedVideos;
+        if (keyword) {
+          filteredCachedVideos = cachedVideos.filter((video: Video) => {
+            const title = video.title.toLowerCase();
+            const keywords = (typeof keyword === "string" ? keyword : "")
+              .toLowerCase()
+              .split(/[,\s]+/)
+              .filter((k) => k.length > 0);
+
+            if (keywords.length === 0) {
+              return true;
+            }
+
+            const matchesKeyword = keywords.some((k) => title.includes(k));
+
+            // 特別なタブ（BATTLE SUMMIT）の場合は追加のフィルタリング
+            if (tabName === "BATTLE SUMMIT") {
+              return (
+                title.includes("battle summit") &&
+                title.includes("vs") &&
+                !title.includes("直前記念") &&
+                !title.includes("記者会見")
+              );
+            }
+
+            return matchesKeyword;
+          });
+        }
+
+        // フィルタリング後の総数
+        const filteredTotalCount = filteredCachedVideos.length;
+
         return res.status(200).json({
-          videos: videoCache[cacheKey].data,
+          videos: filteredCachedVideos,
           pagination: {
-            total: totalCount,
+            total: filteredTotalCount,
             currentPage,
-            totalPages: Math.ceil(totalCount / itemsPerPage),
-            hasNextPage: currentPage * itemsPerPage < totalCount,
+            totalPages: Math.ceil(filteredTotalCount / itemsPerPage),
+            hasNextPage: currentPage * itemsPerPage < filteredTotalCount,
             hasPreviousPage: currentPage > 1,
           },
         });
@@ -229,20 +319,83 @@ export default async function handler(
 
       console.log(`Fetching fresh videos for tab: ${tabName}`);
 
-      // データベースから取得
-      const videos = await model.findMany(queryOptions);
+      // KOKとNGのテーブルは特別処理
+      let videos: Video[] = [];
+      if (tableName === "video_kok") {
+        // KOKテーブルを直接クエリ
+        console.log("KOKテーブルを直接クエリします");
+        videos = await prisma.video_kok.findMany({
+          orderBy: orderByOptions,
+        });
+      } else if (tableName === "video_ng") {
+        // NGテーブルを直接クエリ
+        console.log("NGテーブルを直接クエリします");
+        videos = await prisma.video_ng.findMany({
+          orderBy: orderByOptions,
+        });
+      } else {
+        // 通常のテーブルクエリ
+        videos = await model.findMany({
+          orderBy: orderByOptions,
+        });
+      }
 
-      // キーワードでのフィルタリングを強化
+      console.log(`取得したビデオ数: ${videos.length}件`);
+
+      // NGとKOKチャンネルの場合、データをより適切にフィルタリング
       let filteredVideos = videos;
-      if (keyword) {
-        // タブ名を取得（フィルタリングに使用）
+      if (channelId === "UCyGlD1rZjYGs8IjEfA4Kf3A") {
+        // NGチャンネルの場合、フィルタリング条件を緩和
+        filteredVideos = videos.filter((video: Video) => {
+          const title = video.title.toLowerCase();
+          return (
+            title.includes("vs") ||
+            title.includes("バトル") ||
+            title.includes("battle") ||
+            title.includes("試合") ||
+            title.includes("決勝") ||
+            title.includes("準決勝") ||
+            title.includes("予選") ||
+            title.includes("ng計画") ||
+            title.includes("rap") ||
+            title.includes("ラップ") ||
+            title.includes("mc")
+          );
+        });
+        console.log(
+          `NGチャンネル: 全${videos.length}件中${filteredVideos.length}件を抽出`
+        );
+      } else if (channelId === "UCQbxh2ft3vw9M6Da_kuIa6A") {
+        // KOKチャンネルの場合、バトル関連の動画をフィルタリング
+        filteredVideos = videos.filter((video: Video) => {
+          const title = video.title.toLowerCase();
+          return (
+            title.includes("vs") ||
+            title.includes("バトル") ||
+            title.includes("battle") ||
+            title.includes("king of kings") ||
+            title.includes("kok") ||
+            title.includes("決勝") ||
+            title.includes("準決勝") ||
+            title.includes("予選") ||
+            title.includes("試合") ||
+            title.includes("rap") ||
+            title.includes("ラップ") ||
+            title.includes("mc")
+          );
+        });
+        console.log(
+          `KOKチャンネル: 全${videos.length}件中${filteredVideos.length}件を抽出`
+        );
+      } else if (keyword) {
+        // 通常のキーワードフィルタリング
         console.log(
           `Filtering videos for tab: ${tabName}, keyword: ${keyword}`
         );
 
         filteredVideos = videos.filter((video: Video) => {
           const title = video.title.toLowerCase();
-          const keywords = (keyword as string)
+          const keywords = (typeof keyword === "string" ? keyword : "")
             .toLowerCase()
             .split(/[,\s]+/)
             .filter((k) => k.length > 0);
@@ -271,23 +424,24 @@ export default async function handler(
         );
       }
 
-      // 結果をキャッシュに保存（タブ名を含んだキーで）
+      // 結果をキャッシュに保存（フィルタリング前のすべてのデータ）
       videoCache[cacheKey] = {
-        data: filteredVideos,
+        data: videos,
         timestamp: Date.now(),
       };
 
-      console.log(
-        `Saved ${filteredVideos.length} videos to cache for tab: ${tabName}`
-      );
+      console.log(`Saved ${videos.length} videos to cache for tab: ${tabName}`);
+
+      // フィルタリング後の総数を更新
+      const filteredTotalCount = filteredVideos.length;
 
       return res.status(200).json({
         videos: filteredVideos,
         pagination: {
-          total: totalCount,
+          total: filteredTotalCount,
           currentPage,
-          totalPages: Math.ceil(totalCount / itemsPerPage),
-          hasNextPage: currentPage * itemsPerPage < totalCount,
+          totalPages: Math.ceil(filteredTotalCount / itemsPerPage),
+          hasNextPage: currentPage * itemsPerPage < filteredTotalCount,
           hasPreviousPage: currentPage > 1,
         },
       });
