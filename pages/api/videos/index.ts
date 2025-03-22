@@ -81,8 +81,8 @@ const BATTLE_SUMMIT_CHANNELS = [
   "UC2UCB_L3Kh6Kv5pL3pJZFlA",
 ];
 
-// キャッシュ機能を追加
-const CACHE_DURATION = 1 * 60 * 1000; // 1分間だけキャッシュを保持（短縮）
+// キャッシュ機能を無効化（常に最新データを取得するため）
+const CACHE_DURATION = 0; // キャッシュを無効化
 
 interface CacheItem {
   data: any;
@@ -92,9 +92,13 @@ interface CacheItem {
 // メモリキャッシュの実装
 const videoCache: Record<string, CacheItem> = {};
 
-// キャッシュキーの生成
-const getCacheKey = (queryOptions: any): string => {
-  return JSON.stringify(queryOptions);
+// キャッシュキーの生成 - タブ情報も含める
+const getCacheKey = (
+  queryOptions: any,
+  tabName: string,
+  channelId: string
+): string => {
+  return `${tabName}-${channelId}-${JSON.stringify(queryOptions)}`;
 };
 
 // キャッシュの有効性チェック
@@ -114,6 +118,7 @@ export default async function handler(
     sort = "views",
     page = "1",
     limit = "10",
+    tab = "", // タブ名を追加
   } = req.query;
   const currentPage = parseInt(page as string, 10);
   const itemsPerPage = parseInt(limit as string, 10);
@@ -170,9 +175,13 @@ export default async function handler(
     if (
       !channelId ||
       typeof channelId !== "string" ||
-      !(channelId in CHANNEL_TABLES)
+      (channelId !== "" && !(channelId in CHANNEL_TABLES))
     ) {
-      return res.status(400).json({ error: "Invalid or missing channel ID" });
+      return res.status(400).json({
+        error: "Invalid or missing channel ID",
+        channelId: channelId,
+        isValidKey: channelId in CHANNEL_TABLES,
+      });
     }
 
     const tableName = CHANNEL_TABLES[channelId];
@@ -194,12 +203,18 @@ export default async function handler(
     const totalCount = await model.count();
 
     if (req.method === "GET") {
-      // キャッシュキーの生成
-      const cacheKey = getCacheKey(queryOptions);
+      // タブ名を取得（リクエストから）
+      const tabName = typeof tab === "string" ? tab : "";
 
-      // キャッシュが有効であれば利用
+      // タブ名を含めたキャッシュキーを生成
+      const cacheKey = getCacheKey(queryOptions, tabName, channelId as string);
+
+      // デバッグログ
+      console.log(`Request for tab: ${tabName}, channel: ${channelId}`);
+
+      // キャッシュが有効であれば利用（ただし現在は無効化中）
       if (isCacheValid(cacheKey)) {
-        console.log("Using cached videos data");
+        console.log(`Using cached videos data for tab: ${tabName}`);
         return res.status(200).json({
           videos: videoCache[cacheKey].data,
           pagination: {
@@ -212,12 +227,19 @@ export default async function handler(
         });
       }
 
+      console.log(`Fetching fresh videos for tab: ${tabName}`);
+
       // データベースから取得
       const videos = await model.findMany(queryOptions);
 
-      // キーワードでフィルタリング
+      // キーワードでのフィルタリングを強化
       let filteredVideos = videos;
       if (keyword) {
+        // タブ名を取得（フィルタリングに使用）
+        console.log(
+          `Filtering videos for tab: ${tabName}, keyword: ${keyword}`
+        );
+
         filteredVideos = videos.filter((video: Video) => {
           const title = video.title.toLowerCase();
           const keywords = (keyword as string)
@@ -229,15 +251,35 @@ export default async function handler(
             return true;
           }
 
-          return keywords.some((k) => title.includes(k));
+          const matchesKeyword = keywords.some((k) => title.includes(k));
+
+          // 特別なタブ（BATTLE SUMMIT）の場合は追加のフィルタリング
+          if (tabName === "BATTLE SUMMIT") {
+            return (
+              title.includes("battle summit") &&
+              title.includes("vs") &&
+              !title.includes("直前記念") &&
+              !title.includes("記者会見")
+            );
+          }
+
+          return matchesKeyword;
         });
+
+        console.log(
+          `Filtered ${videos.length} videos to ${filteredVideos.length} for tab: ${tabName}`
+        );
       }
 
-      // 結果をキャッシュに保存
+      // 結果をキャッシュに保存（タブ名を含んだキーで）
       videoCache[cacheKey] = {
         data: filteredVideos,
         timestamp: Date.now(),
       };
+
+      console.log(
+        `Saved ${filteredVideos.length} videos to cache for tab: ${tabName}`
+      );
 
       return res.status(200).json({
         videos: filteredVideos,

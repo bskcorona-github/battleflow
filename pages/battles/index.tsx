@@ -162,28 +162,63 @@ export default function Battles() {
     setPage(1);
   }, [viewType]);
 
+  // 選択したキーワードの変更を監視する
+  useEffect(() => {
+    // キーワードが変更されたら、ページをリセットする
+    setPage(1);
+
+    // 変更後にビデオを取得する処理は別のuseEffectで行う
+    // これにより、selectedKeywordが変更された後、確実にページが1にリセットされてからビデオが取得される
+  }, [selectedKeyword]);
+
+  // ビデオデータ取得のuseEffect
   useEffect(() => {
     const fetchVideos = async () => {
       setLoading(true);
       setError(null);
       try {
-        // キャッシュ防止用の一意のクエリパラメータを追加
-        const timestamp = Date.now();
-        const response = await fetch(
-          `/api/videos?channelId=${encodeURIComponent(
-            selectedKeyword.channelId || ""
-          )}&keyword=${encodeURIComponent(
-            selectedKeyword.query
-          )}&sort=${sortOrder}&page=${page}&limit=${itemsPerPage}&_t=${timestamp}`
+        console.log(
+          `Fetching videos for tab: ${selectedKeyword.name}, channel: ${selectedKeyword.channelId}`
         );
-        const data: ApiResponse = await response.json();
+
+        // キャッシュを完全に無効化するためにタイムスタンプを利用
+        const timestamp = Date.now();
+
+        // URLにタブ情報を含める
+        const url = `/api/videos?channelId=${encodeURIComponent(
+          selectedKeyword.channelId || ""
+        )}&keyword=${encodeURIComponent(
+          selectedKeyword.query
+        )}&sort=${sortOrder}&page=${page}&limit=${itemsPerPage}&tab=${
+          selectedKeyword.name
+        }&_t=${timestamp}`;
+
+        console.log(`Requesting URL: ${url}`);
+
+        const response = await fetch(url);
+        let data: ApiResponse;
+
+        try {
+          data = await response.json();
+        } catch (e) {
+          console.error("JSON parse error:", e);
+          throw new Error("レスポンスの解析に失敗しました");
+        }
 
         if (!response.ok) {
           throw new Error(`API error: ${data.error || "Unknown error"}`);
         }
 
-        setVideos(data.videos);
-        setPaginationInfo(data.pagination);
+        // デバッグ用ログ
+        console.log(
+          `Loaded ${data.videos?.length || 0} videos for tab: ${
+            selectedKeyword.name
+          }`
+        );
+
+        // 状態を更新
+        setVideos(data.videos || []);
+        setPaginationInfo(data.pagination || null);
       } catch (error) {
         console.error("Error fetching videos:", error);
         setError(
@@ -195,11 +230,9 @@ export default function Battles() {
       }
     };
 
-    // 選択したキーワードが変更されたときには、ページをリセット
-    setPage(1);
-
+    // ビデオデータを取得
     fetchVideos();
-  }, [selectedKeyword, sortOrder, page, itemsPerPage]); // viewTypeは依存配列から削除（不要）
+  }, [selectedKeyword, sortOrder, page, itemsPerPage]);
 
   const handleManualUpdate = async () => {
     try {
