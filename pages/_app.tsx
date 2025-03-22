@@ -106,11 +106,12 @@ export default function App({
   return (
     <SessionProvider session={session}>
       <Head>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
         <title>
           MCバトル公式 | 日本最大のバトルMC情報サイト - MCバトルビューワー
         </title>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#000000" />
         <meta
           name="description"
           content="日本最大のMCバトル情報プラットフォーム。UMB、フリースタイルダンジョン、KING OF KINGSなど全国のバトルMC、ラップバトル最新結果とランキングをリアルタイムで更新。ユーザー評価による独自のMCランキングも公開中。"
@@ -132,10 +133,7 @@ export default function App({
           property="og:site_name"
           content="MCバトルビューワー（BattleFlow）"
         />
-        <meta
-          property="og:image"
-          content="https://battleflow.vercel.app/og-image.jpg"
-        />
+        <meta property="og:image" content="/icons/アイコン1.png" />
         <meta property="og:url" content="https://battleflow.vercel.app" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta
@@ -151,6 +149,13 @@ export default function App({
           content="https://battleflow.vercel.app/twitter-card.jpg"
         />
         <link rel="canonical" href="https://battleflow.vercel.app" />
+        <link rel="icon" href="/icons/アイコン1.png" type="image/png" />
+        <link
+          rel="apple-touch-icon"
+          href="/icons/アイコン1.png"
+          type="image/png"
+        />
+        <link rel="mask-icon" href="/icons/アイコン1.png" color="#ff0000" />
       </Head>
       <Navigation />
       <Component {...pageProps} />

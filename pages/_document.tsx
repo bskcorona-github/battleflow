@@ -8,6 +8,12 @@ export default function Document() {
         <link rel="icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/logo192.png" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/icons/アイコン1.png" type="image/png" />
+        <link
+          rel="shortcut icon"
+          href="/icons/アイコン1.png"
+          type="image/png"
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
