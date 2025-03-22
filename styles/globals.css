@@ -3,33 +3,36 @@
 @tailwind utilities;
 
 :root {
-  --primary: #5b21b6; /* パープル 800 */
-  --primary-dark: #4c1d95; /* パープル 900 */
-  --primary-light: #7c3aed; /* パープル 600 */
-  --secondary: #1e40af; /* インディゴ 800 */
-  --secondary-light: #3b82f6; /* ブルー 500 */
+  --primary: #6d28d9; /* パープル 700 - モダンな紫色 */
+  --primary-dark: #5b21b6; /* パープル 800 */
+  --primary-light: #8b5cf6; /* パープル 500 */
+  --secondary: #0284c7; /* スカイブルー 700 - モダンな青色 */
+  --secondary-light: #38bdf8; /* スカイブルー 400 */
   --accent: #f59e0b; /* アンバー 500 */
   --background: #ffffff;
-  --background-alt: #f9fafb;
-  --foreground: #171717;
-  --foreground-muted: #6b7280;
+  --background-alt: #f8fafc; /* より明るいバックグラウンド */
+  --foreground: #0f172a; /* より濃い文字色 */
+  --foreground-muted: #64748b; /* スレート 500 */
   --success: #10b981; /* エメラルド 500 */
   --danger: #ef4444; /* レッド 500 */
   --card-bg: #ffffff;
-  --card-border: #e5e7eb;
-  --card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --card-shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --card-border: #e2e8f0; /* より薄いボーダー */
+  --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05),
+    0 8px 10px -6px rgba(0, 0, 0, 0.01);
+  --card-shadow-hover: 0 25px 50px -12px rgba(0, 0, 0, 0.1),
+    0 12px 24px -8px rgba(0, 0, 0, 0.05);
+  /* グラデーション背景用 */
+  --gradient-start: #6d28d9;
+  --gradient-end: #0284c7;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --primary: #7c3aed; /* パープル 600 */
-    --primary-dark: #6d28d9; /* パープル 700 */
-    --primary-light: #8b5cf6; /* パープル 500 */
-    --secondary: #3b82f6; /* ブルー 500 */
-    --secondary-light: #60a5fa; /* ブルー 400 */
+    --primary: #8b5cf6; /* パープル 500 */
+    --primary-dark: #7c3aed; /* パープル 600 */
+    --primary-light: #a78bfa; /* パープル 400 */
+    --secondary: #38bdf8; /* スカイブルー 400 */
+    --secondary-light: #7dd3fc; /* スカイブルー 300 */
     --accent: #fbbf24; /* アンバー 400 */
     --background: #0f172a; /* スレート 900 */
     --background-alt: #1e293b; /* スレート 800 */
@@ -43,6 +46,9 @@
       0 4px 6px -2px rgba(0, 0, 0, 0.2);
     --card-shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.3),
       0 10px 10px -5px rgba(0, 0, 0, 0.2);
+    /* グラデーション背景用 */
+    --gradient-start: #8b5cf6;
+    --gradient-end: #38bdf8;
   }
 }
 
@@ -55,38 +61,51 @@ body {
 /* カスタムクラス */
 @layer components {
   .card {
-    @apply bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden shadow-md hover:shadow-lg transition-all duration-300;
+    @apply bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300;
   }
 
   .btn {
-    @apply px-4 py-2 rounded-md font-medium transition-colors duration-200;
+    @apply px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 transform hover:translate-y-[-2px];
   }
 
   .btn-primary {
-    @apply bg-purple-700 hover:bg-purple-800 text-white;
+    @apply bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-md hover:shadow-lg;
   }
 
   .btn-secondary {
-    @apply bg-blue-600 hover:bg-blue-700 text-white;
+    @apply bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white shadow-md hover:shadow-lg;
   }
 
   .btn-danger {
-    @apply bg-red-500 hover:bg-red-600 text-white;
+    @apply bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-md hover:shadow-lg;
   }
 
   .btn-ghost {
-    @apply bg-transparent hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200;
+    @apply bg-transparent hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-slate-600;
   }
 
   .input {
-    @apply px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100;
+    @apply px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 shadow-sm;
   }
 
   .textarea {
-    @apply px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 resize-none;
+    @apply px-4 py-2.5 border border-gray-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 resize-none shadow-sm;
   }
 
   .nav-link {
-    @apply hover:text-purple-200 transition-colors font-medium flex items-center gap-2;
+    @apply hover:text-purple-200 transition-colors font-medium flex items-center gap-2 relative after:absolute after:bottom-[-2px] after:left-0 after:w-0 after:h-[2px] after:bg-purple-400 after:transition-all hover:after:w-full;
+  }
+
+  /* 新しいユーティリティクラス */
+  .gradient-bg {
+    @apply bg-gradient-to-r from-purple-600 to-sky-500;
+  }
+
+  .glass-card {
+    @apply bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm rounded-xl border border-white/20 dark:border-slate-700/20 shadow-lg;
+  }
+
+  .section-title {
+    @apply text-2xl font-bold text-gray-800 dark:text-white mb-6 relative inline-block after:absolute after:bottom-[-8px] after:left-0 after:w-1/2 after:h-1 after:bg-gradient-to-r after:from-purple-600 after:to-sky-500;
   }
 }
