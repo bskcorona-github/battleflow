@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { GetServerSideProps } from "next";
 import { prisma } from "@/lib/prisma";
 import { getSession, useSession } from "next-auth/react";
@@ -11,6 +11,7 @@ import toast from "react-hot-toast";
 import MCComment from "@/components/MCComment";
 import type { CommentWithUser } from "@/types/mc";
 import Link from "next/link";
+import Pagination from "@/components/Pagination";
 
 type Props = {
   mcs: (MCRank & {
@@ -50,6 +51,38 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
   const [isAddMCModalOpen, setIsAddMCModalOpen] = useState(false);
   const [expandedComments, setExpandedComments] = useState<number[]>([]);
 
+  // ページネーション関連の状態
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10; // 1ページに10件表示
+
+  const getSortedMCs = () => {
+    const scoreKey = sortKeyToScoreKey[sortKey];
+    return [...mcs].sort((a, b) => b[scoreKey] - a[scoreKey]);
+  };
+
+  // ソート済みのMCを取得
+  const sortedMCs = useMemo(() => getSortedMCs(), [mcs, sortKey]);
+
+  // 現在のページに表示するMCを計算
+  const currentMCs = useMemo(() => {
+    const indexOfLastMC = currentPage * itemsPerPage;
+    const indexOfFirstMC = indexOfLastMC - itemsPerPage;
+    return sortedMCs.slice(indexOfFirstMC, indexOfLastMC);
+  }, [sortedMCs, currentPage, itemsPerPage]);
+
+  // 総ページ数を計算
+  const totalPages = useMemo(
+    () => Math.ceil(sortedMCs.length / itemsPerPage),
+    [sortedMCs.length, itemsPerPage]
+  );
+
+  // ページ変更のハンドラー
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    // ページが変わったらページトップにスクロール
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleVote = async (
     mcId: number,
     scores: {
@@ -80,11 +113,6 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
       console.error("Vote error:", error);
       toast.error("投票に失敗しました。");
     }
-  };
-
-  const getSortedMCs = () => {
-    const scoreKey = sortKeyToScoreKey[sortKey];
-    return [...mcs].sort((a, b) => b[scoreKey] - a[scoreKey]);
   };
 
   // リセット処理の関数
@@ -318,7 +346,10 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
         <div className="mb-4">
           <select
             value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            onChange={(e) => {
+              setSortKey(e.target.value as SortKey);
+              setCurrentPage(1); // ソートが変わったら最初のページに戻る
+            }}
             className="px-3 py-1.5 rounded border bg-white text-gray-900 text-sm"
           >
             <option value="total">総合スコア</option>
@@ -328,16 +359,20 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
             <option value="dialogue">対話</option>
             <option value="musicality">音楽性</option>
           </select>
+          <span className="ml-4 text-sm text-gray-600">
+            全 {mcs.length} 件中 {(currentPage - 1) * itemsPerPage + 1} -{" "}
+            {Math.min(currentPage * itemsPerPage, mcs.length)} 件を表示
+          </span>
         </div>
 
         {/* ランキング一覧 */}
         <div className="grid gap-4">
-          {getSortedMCs().map((mc, index) => (
+          {currentMCs.map((mc, index) => (
             <div key={mc.id} className="bg-white rounded-lg shadow p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <span className="text-xl font-bold text-gray-800">
-                    {index + 1}
+                    {(currentPage - 1) * itemsPerPage + index + 1}
                   </span>
                   <div>
                     <Link
@@ -466,6 +501,13 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
             </div>
           ))}
         </div>
+
+        {/* ページネーションコンポーネント */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
 
         {/* MC追加モーダル */}
         <Modal

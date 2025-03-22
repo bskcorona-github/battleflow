@@ -9,6 +9,7 @@ import React from "react";
 import { toast } from "react-hot-toast";
 import CommentReply from "@/components/CommentReply";
 import DOMPurify from "isomorphic-dompurify";
+import Pagination from "@/components/Pagination";
 
 type Props = {
   mcs: MCWithLikesAndComments[];
@@ -79,7 +80,7 @@ const MCViewer = ({
         <tr className="hover:bg-gray-50">
           <td className="px-6 py-4 whitespace-nowrap">
             <div className="flex items-center">
-              {mc.image && (
+              {mc.image ? (
                 <div className="relative w-10 h-10 mr-3">
                   <Image
                     src={`/images/mcs/${encodeURIComponent(mc.image)}`}
@@ -87,7 +88,26 @@ const MCViewer = ({
                     fill
                     sizes="40px"
                     className="rounded-full object-cover"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      // 親要素を取得
+                      const parent = img.parentElement;
+                      if (parent) {
+                        // 親要素のスタイルを維持しながら内容を置き換え
+                        parent.innerHTML = `<div class="flex items-center justify-center w-full h-full bg-gray-200 rounded-full">
+                          <span class="text-gray-600 font-medium text-xs">${mc.name
+                            .substring(0, 2)
+                            .toUpperCase()}</span>
+                        </div>`;
+                      }
+                    }}
                   />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center w-10 h-10 mr-3 bg-gray-200 rounded-full">
+                  <span className="text-gray-600 font-medium text-xs">
+                    {mc.name.substring(0, 2).toUpperCase()}
+                  </span>
                 </div>
               )}
               <div className="text-sm font-medium text-gray-900">{mc.name}</div>
@@ -407,8 +427,32 @@ export default function MCList({ mcs: initialMcs }: Props) {
   const { data: session } = useSession();
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // ページネーション関連の状態
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6; // 3の倍数
+
   // ソートされたMCsを取得
   const sortedMCs = useMemo(() => sortMCs(mcs, sortType), [mcs, sortType]);
+
+  // 現在のページに表示するMCを計算
+  const currentMCs = useMemo(() => {
+    const indexOfLastMC = currentPage * itemsPerPage;
+    const indexOfFirstMC = indexOfLastMC - itemsPerPage;
+    return sortedMCs.slice(indexOfFirstMC, indexOfLastMC);
+  }, [sortedMCs, currentPage, itemsPerPage]);
+
+  // 総ページ数を計算
+  const totalPages = useMemo(
+    () => Math.ceil(sortedMCs.length / itemsPerPage),
+    [sortedMCs.length, itemsPerPage]
+  );
+
+  // ページ変更のハンドラー
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    // ページが変わったらページトップにスクロール
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // 管理者権限チェック
   useEffect(() => {
@@ -723,7 +767,10 @@ export default function MCList({ mcs: initialMcs }: Props) {
             {/* ソート選択 */}
             <select
               value={sortType}
-              onChange={(e) => setSortType(e.target.value as SortType)}
+              onChange={(e) => {
+                setSortType(e.target.value as SortType);
+                setCurrentPage(1); // ソートが変わったら最初のページに戻る
+              }}
               className="px-4 py-2 rounded border bg-white text-gray-700"
             >
               <option value="name">名前 (A-Z, あ-ん)</option>
@@ -767,7 +814,7 @@ export default function MCList({ mcs: initialMcs }: Props) {
           }
         >
           {viewMode === "grid" ? (
-            sortedMCs.map((mc) => (
+            currentMCs.map((mc) => (
               <div
                 key={mc.id}
                 id={mc.name}
@@ -807,7 +854,7 @@ export default function MCList({ mcs: initialMcs }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedMCs.map((mc) => (
+                {currentMCs.map((mc) => (
                   <MCViewer
                     key={mc.id}
                     mc={mc}
@@ -826,6 +873,13 @@ export default function MCList({ mcs: initialMcs }: Props) {
             </table>
           )}
         </div>
+
+        {/* ページネーションコンポーネント */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
       </div>
     </div>
   );

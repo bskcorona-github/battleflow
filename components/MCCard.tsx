@@ -99,10 +99,24 @@ export default function MCCard({
             fill
             sizes="400px"
             className="object-cover"
+            onError={(e) => {
+              // fallback to default image if the MC image fails to load
+              const img = e.target as HTMLImageElement;
+              // Create placeholder with initials
+              const container = document.createElement("div");
+              container.className =
+                "flex items-center justify-center h-full bg-gray-100";
+              container.innerHTML = `<span class="text-gray-500 font-bold text-4xl">${mc.name
+                .substring(0, 2)
+                .toUpperCase()}</span>`;
+              img.parentNode?.replaceChild(container, img);
+            }}
           />
         ) : (
           <div className="flex items-center justify-center h-full bg-gray-100">
-            <span className="text-gray-500 font-medium">No Image</span>
+            <span className="text-gray-500 font-bold text-4xl">
+              {mc.name.substring(0, 2).toUpperCase()}
+            </span>
           </div>
         )}
       </div>
