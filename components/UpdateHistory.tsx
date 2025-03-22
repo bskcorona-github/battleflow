@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { UpdateItem } from "../utils/updateHistory";
 
 interface UpdateHistoryProps {
@@ -8,10 +8,12 @@ interface UpdateHistoryProps {
 
 const UpdateHistory: React.FC<UpdateHistoryProps> = ({
   items,
-  maxItems = 5,
+  maxItems = 7,
 }) => {
+  const [expanded, setExpanded] = useState(false);
+
   // 表示する更新履歴の数を制限
-  const displayItems = items.slice(0, maxItems);
+  const displayItems = expanded ? items : items.slice(0, maxItems);
 
   return (
     <div className="glass-card p-6">
@@ -47,6 +49,53 @@ const UpdateHistory: React.FC<UpdateHistoryProps> = ({
           </li>
         ))}
       </ul>
+
+      {items.length > maxItems && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="inline-flex items-center text-sm font-medium text-purple-600 hover:text-purple-500 dark:text-purple-400 dark:hover:text-purple-300"
+          >
+            {expanded ? (
+              <>
+                <span>折りたたむ</span>
+                <svg
+                  className="ml-1 w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M5 15l7-7 7 7"
+                  ></path>
+                </svg>
+              </>
+            ) : (
+              <>
+                <span>もっと見る</span>
+                <svg
+                  className="ml-1 w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M19 9l-7 7-7-7"
+                  ></path>
+                </svg>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
