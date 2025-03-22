@@ -21,6 +21,8 @@ model MC {
   likes         Like[]
   comments      MCComment[]
   ranking       MCRank?
+  
+  @@map("mc")
 }
 
 model Account {
@@ -76,6 +78,7 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@map("verificationtoken")
 }
 
 model Video {
