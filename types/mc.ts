@@ -18,6 +18,7 @@ export interface CommentWithUser extends MCComment {
     email: string | null;
   };
   replies?: CommentWithUser[];
+  mcRankId?: number;
 }
 
 export interface MCWithLikesAndComments extends MC {

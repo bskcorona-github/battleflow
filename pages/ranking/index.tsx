@@ -55,13 +55,11 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10; // 1ページに10件表示
 
-  const getSortedMCs = () => {
+  // ソート関数をuseMemo内に移動
+  const sortedMCs = useMemo(() => {
     const scoreKey = sortKeyToScoreKey[sortKey];
     return [...mcs].sort((a, b) => b[scoreKey] - a[scoreKey]);
-  };
-
-  // ソート済みのMCを取得
-  const sortedMCs = useMemo(() => getSortedMCs(), [mcs, sortKey]);
+  }, [mcs, sortKey]);
 
   // 現在のページに表示するMCを計算
   const currentMCs = useMemo(() => {
@@ -570,15 +568,15 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 
       // このユーザーが投票済みのMCを取得
       if (user) {
-        const userVotes = await prisma.rankingVote.findMany({
+        const userVotes = await prisma.vote.findMany({
           where: {
             userId: user.id,
           },
           select: {
-            mcRankId: true,
+            mcId: true,
           },
         });
-        votedMCIds = userVotes.map((vote) => vote.mcRankId);
+        votedMCIds = userVotes.map((vote) => vote.mcId);
       }
     }
 
@@ -587,7 +585,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       select: {
         id: true,
         name: true,
-        image: true,
         rhymeScore: true,
         vibesScore: true,
         flowScore: true,
@@ -601,9 +598,9 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
             votes: true,
           },
         },
-        // コメント数を削減して初期表示を高速化
+        // すべてのコメントを取得
         comments: {
-          take: 1,
+          // take制限を削除してすべてのコメントを取得
           where: {
             parentId: null,
           },
@@ -620,7 +617,30 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                 id: true,
                 name: true,
                 image: true,
-                // メールアドレスは表示に不要なので除外
+                email: true, // emailも取得（編集・削除権限の判定に必要）
+              },
+            },
+            // 返信コメントも取得
+            replies: {
+              select: {
+                id: true,
+                content: true,
+                createdAt: true,
+                updatedAt: true,
+                userId: true,
+                mcRankId: true,
+                parentId: true,
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true,
+                    email: true, // emailも取得
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: "asc",
               },
             },
           },
@@ -640,7 +660,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       const serializedMC = {
         id: mc.id,
         name: mc.name,
-        image: mc.image,
         rhymeScore: mc.rhymeScore,
         vibesScore: mc.vibesScore,
         flowScore: mc.flowScore,
@@ -651,8 +670,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         hasVoted: votedMCIds.includes(mc.id),
         createdAt: mc.createdAt.toISOString(),
         updatedAt: mc.updatedAt.toISOString(),
-        // コメントも最小限の情報に絞る
-        comments: mc.comments.map((comment: any) => ({
+        // コメントと返信コメント情報を含める
+        comments: mc.comments.map((comment) => ({
           id: comment.id,
           content: comment.content,
           createdAt: comment.createdAt.toISOString(),
@@ -664,8 +683,24 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
             id: comment.user.id,
             name: comment.user.name,
             image: comment.user.image,
+            email: comment.user.email, // emailを含める
           },
-          replies: [], // 初期表示では空配列
+          // 返信コメントを含める
+          replies: comment.replies?.map((reply) => ({
+            id: reply.id,
+            content: reply.content,
+            createdAt: reply.createdAt.toISOString(),
+            updatedAt: reply.updatedAt.toISOString(),
+            userId: reply.userId,
+            mcId: reply.mcRankId,
+            parentId: reply.parentId,
+            user: {
+              id: reply.user.id,
+              name: reply.user.name,
+              image: reply.user.image,
+              email: reply.user.email,
+            },
+          })),
         })),
       };
 

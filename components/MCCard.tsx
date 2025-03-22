@@ -209,6 +209,7 @@ export default function MCCard({
     isLoadingComments,
     setMcs,
     commentsStorageKey,
+    CACHE_EXPIRY,
   ]);
 
   return (

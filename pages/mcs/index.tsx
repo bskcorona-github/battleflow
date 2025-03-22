@@ -973,6 +973,7 @@ export default function MCList({ mcs: initialMcs }: Props) {
                   handleReply={handleReply}
                   expandedComments={expandedComments}
                   toggleComments={toggleComments}
+                  setMcs={setMcs}
                 />
               </div>
             ))
@@ -1080,10 +1081,10 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                 take: 1,
               }
             : false,
-        // コメント数を減らしてレスポンスサイズを縮小
+        // すべてのコメントを取得
         comments: {
           orderBy: { createdAt: "desc" },
-          take: 1, // 最新の1件のみ取得して初期表示を高速化
+          // take制限を削除してすべてのコメントを取得
           where: { parentId: null },
           select: {
             id: true,
@@ -1097,7 +1098,30 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                 id: true,
                 name: true,
                 image: true,
-                // メールアドレスは表示に不要なので除外
+                email: true, // emailも取得（編集・削除権限の判定に必要）
+              },
+            },
+            // 返信コメントも取得
+            replies: {
+              select: {
+                id: true,
+                content: true,
+                createdAt: true,
+                updatedAt: true,
+                userId: true,
+                mcId: true,
+                parentId: true,
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true,
+                    email: true, // emailも取得
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: "asc",
               },
             },
           },
@@ -1122,7 +1146,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         createdAt: mc.createdAt.toISOString(),
         updatedAt: mc.updatedAt.toISOString(),
         // コメントを最小限の情報に絞る
-        comments: mc.comments.map((comment: any) => ({
+        comments: mc.comments.map((comment) => ({
           id: comment.id,
           content: comment.content,
           createdAt: comment.createdAt.toISOString(),
@@ -1134,8 +1158,23 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
             id: comment.user.id,
             name: comment.user.name,
             image: comment.user.image,
+            email: comment.user.email,
           },
-          replies: [], // 初期表示では空配列
+          replies: comment.replies?.map((reply) => ({
+            id: reply.id,
+            content: reply.content,
+            createdAt: reply.createdAt.toISOString(),
+            updatedAt: reply.updatedAt.toISOString(),
+            userId: reply.userId,
+            mcId: reply.mcId,
+            parentId: reply.parentId,
+            user: {
+              id: reply.user.id,
+              name: reply.user.name,
+              image: reply.user.image,
+              email: reply.user.email,
+            },
+          })),
         })),
       };
 

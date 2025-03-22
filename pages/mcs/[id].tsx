@@ -118,7 +118,7 @@ export default function MCDetail({ mc, session }: Props) {
         />
         <meta
           property="og:image"
-          content={mc.imageUrl || "https://your-domain.com/default-mc.jpg"}
+          content={mc.image || "https://your-domain.com/default-mc.jpg"}
         />
         <link rel="canonical" href={`https://your-domain.com/mcs/${mc.id}`} />
         <script
@@ -131,7 +131,7 @@ export default function MCDetail({ mc, session }: Props) {
               description:
                 mc.description?.replace(/<br>/g, " ") ||
                 `${mc.name}のプロフィール`,
-              image: mc.imageUrl || "https://your-domain.com/default-mc.jpg",
+              image: mc.image || "https://your-domain.com/default-mc.jpg",
               url: `https://your-domain.com/mcs/${mc.id}`,
               homeLocation: {
                 "@type": "Place",
@@ -166,9 +166,9 @@ export default function MCDetail({ mc, session }: Props) {
           <div className="p-6">
             <div className="flex flex-col md:flex-row">
               <div className="md:w-1/3 mb-6 md:mb-0">
-                {mc.imageUrl ? (
+                {mc.image ? (
                   <Image
-                    src={mc.imageUrl}
+                    src={`/images/mcs/${encodeURIComponent(mc.image)}`}
                     alt={mc.name}
                     width={300}
                     height={300}
@@ -319,7 +319,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getSession(context);
 
   try {
-    const mc = await prisma.mc.findUnique({
+    const mc = await prisma.mC.findUnique({
       where: {
         id: Number(id),
       },
