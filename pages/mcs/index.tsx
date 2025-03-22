@@ -691,6 +691,12 @@ export default function MCList({ mcs: initialMcs }: Props) {
       return;
     }
 
+    // 確実にセッションIDが存在することを確認
+    if (!session.user?.id) {
+      toast.error("セッション情報が不足しています。再ログインしてください");
+      return;
+    }
+
     // 楽観的更新: UIを即座に更新
     const targetMc = mcs.find((mc) => mc.id === mcId);
     if (targetMc) {
@@ -719,14 +725,17 @@ export default function MCList({ mcs: initialMcs }: Props) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ mcId }),
+        credentials: "include", // クッキーを含める
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "いいねの処理に失敗しました");
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: "いいねの処理に失敗しました" }));
+        throw new Error(errorData.error || "いいねの処理に失敗しました");
       }
 
-      // APIレスポンスで正確な値に更新（必要な場合）
+      // APIレスポンスで正確な値に更新
       const data = await response.json();
       setMcs((prevMcs) =>
         prevMcs.map((mc) =>

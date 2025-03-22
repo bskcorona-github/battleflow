@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { getSession } from "next-auth/react";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]";
 import { prisma } from "@/lib/prisma";
 
 export default async function handler(
@@ -10,30 +11,28 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // セッションの確認
-  const session = await getSession({ req });
-  if (!session || !session.user) {
-    return res.status(401).json({ error: "認証が必要です" });
-  }
-
   try {
+    // セッションの確認 - getServerSessionに変更
+    const session = await getServerSession(req, res, authOptions);
+    if (!session || !session.user) {
+      return res.status(401).json({ error: "認証が必要です" });
+    }
+
     const { mcId } = req.body;
 
-    // ユーザー情報を取得
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email || "" },
-      select: { id: true },
-    });
+    // 数値に変換
+    const parsedMcId = typeof mcId === "string" ? parseInt(mcId, 10) : mcId;
 
-    if (!user) {
-      return res.status(404).json({ error: "ユーザーが見つかりません" });
+    // ユーザー情報はセッションから直接取得
+    if (!session.user.id) {
+      return res.status(401).json({ error: "ユーザーIDが見つかりません" });
     }
 
     // 既存のいいねを確認
     const existingLike = await prisma.like.findFirst({
       where: {
-        mcId: mcId,
-        userId: user.id,
+        mcId: parsedMcId,
+        userId: session.user.id,
       },
     });
 
@@ -52,7 +51,7 @@ export default async function handler(
         }),
         prisma.mC.update({
           where: {
-            id: mcId,
+            id: parsedMcId,
           },
           data: {
             likesCount: {
@@ -69,13 +68,13 @@ export default async function handler(
       await prisma.$transaction([
         prisma.like.create({
           data: {
-            mcId: mcId,
-            userId: user.id,
+            mcId: parsedMcId,
+            userId: session.user.id,
           },
         }),
         prisma.mC.update({
           where: {
-            id: mcId,
+            id: parsedMcId,
           },
           data: {
             likesCount: {
@@ -92,7 +91,7 @@ export default async function handler(
     // 更新後のいいね数を取得
     const updatedMC = await prisma.mC.findUnique({
       where: {
-        id: mcId,
+        id: parsedMcId,
       },
       select: {
         likesCount: true,

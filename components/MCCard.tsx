@@ -50,6 +50,12 @@ export default function MCCard({
       return;
     }
 
+    // セッションIDが存在することを確認
+    if (!session.user?.id) {
+      toast.error("セッション情報が不足しています。再ログインしてください");
+      return;
+    }
+
     // 楽観的UIアップデート - ここですぐに画面を更新
     const wasLiked = mc.isLikedByUser;
     const newLikesCount = mc.likesCount + (wasLiked ? -1 : 1);
@@ -63,6 +69,9 @@ export default function MCCard({
       mc.isLikedByUser = wasLiked;
       mc.likesCount = mc.likesCount + (wasLiked ? 1 : -1);
       console.error("Error liking MC:", error);
+      toast.error(
+        error instanceof Error ? error.message : "いいねの処理に失敗しました"
+      );
     }
   };
 
