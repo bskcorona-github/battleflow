@@ -481,6 +481,8 @@ export default function MCList({ mcs: initialMcs }: Props) {
   const [expandedComments, setExpandedComments] = useState<number[]>([]);
   const { data: session } = useSession();
   const [isAdmin, setIsAdmin] = useState(false);
+  // いいね処理の連打防止用の状態 - フックを他のフックと同じレベルに移動
+  const [likingMcIds, setLikingMcIds] = useState<Set<number>>(new Set());
 
   // ページネーション関連の状態
   const [currentPage, setCurrentPage] = useState(1);
@@ -697,6 +699,19 @@ export default function MCList({ mcs: initialMcs }: Props) {
       return;
     }
 
+    // 連打防止: すでに処理中なら何もしない
+    if (likingMcIds.has(mcId)) {
+      console.log(`MC ID ${mcId} のいいね処理が進行中です`);
+      return;
+    }
+
+    // 処理中フラグを設定
+    setLikingMcIds((prev) => {
+      const newSet = new Set(prev);
+      newSet.add(mcId);
+      return newSet;
+    });
+
     // 対象のMCを検索
     const targetMc = mcs.find((mc) => mc.id === mcId);
     if (!targetMc) return;
@@ -791,6 +806,13 @@ export default function MCList({ mcs: initialMcs }: Props) {
           error instanceof Error ? error.message : "いいねの処理に失敗しました"
         );
       }
+    } finally {
+      // 処理が完了したらフラグを解除
+      setLikingMcIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(mcId);
+        return newSet;
+      });
     }
   };
 

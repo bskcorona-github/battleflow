@@ -95,15 +95,22 @@ export default async function handler(
         isLiked = true;
       }
 
-      // いいね数を更新して最新の状態を取得
+      // 連打対策: いいね処理後に現在のいいね数を直接カウント
+      // これにより、常に正確なカウントを返せる
+      const currentLikes = await tx.like.count({
+        where: {
+          mcId: parsedMcId,
+        },
+      });
+
+      // いいね数をカウントの実際の値で更新
       const updatedMC = await tx.mC.update({
         where: {
           id: parsedMcId,
         },
         data: {
-          likesCount: {
-            [existingLike ? "decrement" : "increment"]: 1,
-          },
+          // 増減ではなく、実際のカウント値を設定
+          likesCount: currentLikes,
         },
         select: {
           likesCount: true,
