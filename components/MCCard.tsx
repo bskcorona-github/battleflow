@@ -49,9 +49,19 @@ export default function MCCard({
       toast.error("いいねするにはログインが必要です");
       return;
     }
+
+    // 楽観的UIアップデート - ここですぐに画面を更新
+    const wasLiked = mc.isLikedByUser;
+    const newLikesCount = mc.likesCount + (wasLiked ? -1 : 1);
+    mc.isLikedByUser = !wasLiked;
+    mc.likesCount = newLikesCount;
+
     try {
       await onLike(mc.id);
     } catch (error) {
+      // エラー時は元に戻す
+      mc.isLikedByUser = wasLiked;
+      mc.likesCount = mc.likesCount + (wasLiked ? 1 : -1);
       console.error("Error liking MC:", error);
     }
   };
@@ -104,7 +114,19 @@ export default function MCCard({
       const fetchAllComments = async () => {
         setIsLoadingComments(true);
         try {
-          const response = await fetch(`/api/mcs/fetch-comments?mcId=${mc.id}`);
+          // controller for aborting fetch if component unmounts
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒タイムアウト
+
+          const response = await fetch(
+            `/api/mcs/fetch-comments?mcId=${mc.id}`,
+            {
+              signal: controller.signal,
+            }
+          );
+
+          clearTimeout(timeoutId);
+
           if (response.ok) {
             const comments = await response.json();
             // 既存のコメントを全てのコメントで置き換える
@@ -114,7 +136,12 @@ export default function MCCard({
             console.error("コメント取得エラー:", await response.text());
           }
         } catch (error) {
-          console.error("コメント読み込みエラー:", error);
+          // AbortErrorは無視
+          if (error instanceof DOMException && error.name === "AbortError") {
+            console.log("コメント読み込みを中断しました");
+          } else {
+            console.error("コメント読み込みエラー:", error);
+          }
         } finally {
           setIsLoadingComments(false);
         }

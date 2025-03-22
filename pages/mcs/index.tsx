@@ -691,7 +691,28 @@ export default function MCList({ mcs: initialMcs }: Props) {
       return;
     }
 
+    // 楽観的更新: UIを即座に更新
+    const targetMc = mcs.find((mc) => mc.id === mcId);
+    if (targetMc) {
+      const newLikedState = !targetMc.isLikedByUser;
+      const newLikesCount = targetMc.likesCount + (newLikedState ? 1 : -1);
+
+      // UIを先に更新
+      setMcs((prevMcs) =>
+        prevMcs.map((mc) =>
+          mc.id === mcId
+            ? {
+                ...mc,
+                isLikedByUser: newLikedState,
+                likesCount: newLikesCount,
+              }
+            : mc
+        )
+      );
+    }
+
     try {
+      // APIリクエストを非同期で実行
       const response = await fetch(`/api/mc/like`, {
         method: "POST",
         headers: {
@@ -705,6 +726,7 @@ export default function MCList({ mcs: initialMcs }: Props) {
         throw new Error(error.error || "いいねの処理に失敗しました");
       }
 
+      // APIレスポンスで正確な値に更新（必要な場合）
       const data = await response.json();
       setMcs((prevMcs) =>
         prevMcs.map((mc) =>
@@ -718,9 +740,23 @@ export default function MCList({ mcs: initialMcs }: Props) {
         )
       );
 
-      toast.success(data.message);
+      // いいねのトースト通知は削除
     } catch (error) {
       console.error("Error liking MC:", error);
+      // エラー時は元の状態に戻す
+      if (targetMc) {
+        setMcs((prevMcs) =>
+          prevMcs.map((mc) =>
+            mc.id === mcId
+              ? {
+                  ...mc,
+                  isLikedByUser: targetMc.isLikedByUser,
+                  likesCount: targetMc.likesCount,
+                }
+              : mc
+          )
+        );
+      }
       toast.error(
         error instanceof Error ? error.message : "いいねの処理に失敗しました"
       );
@@ -955,7 +991,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       });
     }
 
-    // データを一度に取得するのではなく、必要な情報のみ取得
+    // MC一覧を取得 - コメントは初期表示では最小限に
     const mcs = await prisma.mC.findMany({
       select: {
         id: true,
@@ -979,13 +1015,12 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
               take: 1, // ユーザーがいいねしているかどうかだけ確認するため、最大1件のみ取得
             }
           : false,
-        // コメントはそれぞれのMCカードを開いたときに非同期で取得するよう変更
-        // 初期表示では最新5件のみ取得する
+        // コメントは初期表示では最小限のデータのみ取得
         comments: {
           orderBy: {
             createdAt: "desc",
           },
-          take: 5, // 最新の5件のみ取得
+          take: 2, // 最新の2件のみ取得
           where: {
             parentId: null, // 親コメントのみ取得（返信は含めない）
           },
@@ -995,7 +1030,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
             createdAt: true,
             updatedAt: true,
             userId: true,
-            parentId: true,
             mcId: true,
             user: {
               select: {
@@ -1023,7 +1057,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         updatedAt: comment.updatedAt.toISOString(),
         userId: comment.userId,
         mcId: comment.mcId,
-        parentId: comment.parentId,
+        parentId: null,
         user: {
           id: comment.user.id,
           name: comment.user.name,

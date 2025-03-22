@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]";
+import { getSession } from "next-auth/react";
 import { prisma } from "@/lib/prisma";
 
 export default async function handler(
@@ -11,94 +10,104 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // セッションの確認
+  const session = await getSession({ req });
+  if (!session || !session.user) {
+    return res.status(401).json({ error: "認証が必要です" });
+  }
+
   try {
-    const session = await getServerSession(req, res, authOptions);
-    if (!session?.user?.id) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
     const { mcId } = req.body;
-    if (!mcId) {
-      return res.status(400).json({ error: "MC ID is required" });
+
+    // ユーザー情報を取得
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email || "" },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "ユーザーが見つかりません" });
     }
 
-    // 数値型に変換
-    const parsedMcId = typeof mcId === "string" ? parseInt(mcId, 10) : mcId;
+    // 既存のいいねを確認
+    const existingLike = await prisma.like.findFirst({
+      where: {
+        mcId: mcId,
+        userId: user.id,
+      },
+    });
 
-    // トランザクションを使用して処理
-    const result = await prisma.$transaction(async (tx) => {
-      // 既存のいいねを確認 (複合ユニーク制約を使用)
-      const existingLike = await tx.like.findUnique({
-        where: {
-          userId_mcId: {
-            userId: session.user.id,
-            mcId: parsedMcId,
-          },
-        },
-      });
+    let liked = false;
+    let message = "";
+    let likesCount = 0;
 
-      if (existingLike) {
-        // いいねを削除
-        await tx.like.delete({
+    // 既存のいいねがある場合は削除、ない場合は作成
+    if (existingLike) {
+      // トランザクションでいいね削除といいね数の更新を行う
+      await prisma.$transaction([
+        prisma.like.delete({
           where: {
-            userId_mcId: {
-              userId: session.user.id,
-              mcId: parsedMcId,
-            },
+            id: existingLike.id,
           },
-        });
-
-        // MCのlikesCountを減少
-        const updatedMC = await tx.mC.update({
-          where: { id: parsedMcId },
+        }),
+        prisma.mC.update({
+          where: {
+            id: mcId,
+          },
           data: {
             likesCount: {
               decrement: 1,
             },
           },
-        });
+        }),
+      ]);
 
-        return {
-          liked: false,
-          likesCount: updatedMC.likesCount,
-          message: "いいねを取り消しました",
-        };
-      }
-
-      // いいねを作成
-      await tx.like.create({
-        data: {
-          userId: session.user.id,
-          mcId: parsedMcId,
-        },
-      });
-
-      // MCのlikesCountを増加
-      const updatedMC = await tx.mC.update({
-        where: { id: parsedMcId },
-        data: {
-          likesCount: {
-            increment: 1,
+      message = "いいねを取り消しました";
+      liked = false;
+    } else {
+      // トランザクションでいいね作成といいね数の更新を行う
+      await prisma.$transaction([
+        prisma.like.create({
+          data: {
+            mcId: mcId,
+            userId: user.id,
           },
-        },
-      });
+        }),
+        prisma.mC.update({
+          where: {
+            id: mcId,
+          },
+          data: {
+            likesCount: {
+              increment: 1,
+            },
+          },
+        }),
+      ]);
 
-      return {
-        liked: true,
-        likesCount: updatedMC.likesCount,
-        message: "いいねしました",
-      };
+      message = "いいねしました";
+      liked = true;
+    }
+
+    // 更新後のいいね数を取得
+    const updatedMC = await prisma.mC.findUnique({
+      where: {
+        id: mcId,
+      },
+      select: {
+        likesCount: true,
+      },
     });
 
-    return res.status(200).json(result);
+    likesCount = updatedMC?.likesCount || 0;
+
+    return res.status(200).json({
+      message,
+      liked,
+      likesCount,
+    });
   } catch (error) {
-    console.error("Error processing like:", error);
-    if (error instanceof Error) {
-      return res.status(500).json({
-        error: "Internal server error",
-        message: error.message,
-      });
-    }
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("Error handling like:", error);
+    return res.status(500).json({ error: "いいねの処理に失敗しました" });
   }
 }
