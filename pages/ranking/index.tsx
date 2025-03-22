@@ -589,9 +589,9 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
             votes: true,
           },
         },
-        // 初期表示時には一部のコメントのみ取得して負荷を軽減
+        // 初期表示時には必要最小限のコメントのみ取得して負荷を軽減
         comments: {
-          take: 3, // 初期表示では最新3件のみ表示
+          take: 2, // 初期表示では最新2件のみに制限
           select: {
             id: true,
             content: true,

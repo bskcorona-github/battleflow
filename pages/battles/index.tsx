@@ -167,12 +167,14 @@ export default function Battles() {
       setLoading(true);
       setError(null);
       try {
+        // キャッシュ防止用の一意のクエリパラメータを追加
+        const timestamp = Date.now();
         const response = await fetch(
           `/api/videos?channelId=${encodeURIComponent(
             selectedKeyword.channelId || ""
           )}&keyword=${encodeURIComponent(
             selectedKeyword.query
-          )}&sort=${sortOrder}&page=${page}&limit=${itemsPerPage}`
+          )}&sort=${sortOrder}&page=${page}&limit=${itemsPerPage}&_t=${timestamp}`
         );
         const data: ApiResponse = await response.json();
 
@@ -193,8 +195,11 @@ export default function Battles() {
       }
     };
 
+    // 選択したキーワードが変更されたときには、ページをリセット
+    setPage(1);
+
     fetchVideos();
-  }, [selectedKeyword, sortOrder, page, viewType, itemsPerPage]); // itemsPerPageを依存配列に追加
+  }, [selectedKeyword, sortOrder, page, itemsPerPage]); // viewTypeは依存配列から削除（不要）
 
   const handleManualUpdate = async () => {
     try {

@@ -99,7 +99,7 @@ export default function MCCard({
     return session?.user?.email === comment.user.email;
   };
 
-  // コメント展開時に全コメントを読み込む
+  // コメント展開時に全コメントを読み込む（パフォーマンス最適化版）
   useEffect(() => {
     // コメントが表示されておらず、まだロード済みでない場合は何もしない
     if (
@@ -114,9 +114,28 @@ export default function MCCard({
     const fetchAllComments = async () => {
       setIsLoadingComments(true);
       try {
-        // コントローラを作成して10秒でタイムアウトするように設定
+        // コントローラを作成して8秒でタイムアウトするように設定
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+        // パフォーマンス向上のためのキャッシュ戦略
+        const cacheKey = `comments-${mc.id}`;
+        const cachedComments = sessionStorage.getItem(cacheKey);
+
+        // キャッシュがある場合、それを使用
+        if (cachedComments) {
+          try {
+            const comments = JSON.parse(cachedComments);
+            mc.comments = comments;
+            setHasLoadedAllComments(true);
+            setIsLoadingComments(false);
+            clearTimeout(timeoutId);
+            return;
+          } catch (error) {
+            // キャッシュの解析に失敗した場合は無視して通常のフェッチに戻る
+            console.log("キャッシュの解析に失敗しました", error);
+          }
+        }
 
         const response = await fetch(`/api/mcs/fetch-comments?mcId=${mc.id}`, {
           signal: controller.signal,
@@ -131,6 +150,17 @@ export default function MCCard({
           const comments = await response.json();
           // 既存のコメントを全てのコメントで置き換える
           mc.comments = comments;
+          // セッションストレージにキャッシュ（5分間有効）
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify(comments));
+            // 5分後にキャッシュを削除するタイマーを設定
+            setTimeout(() => {
+              sessionStorage.removeItem(cacheKey);
+            }, 5 * 60 * 1000);
+          } catch (error) {
+            // ストレージの容量制限などのエラーは無視
+            console.log("コメントのキャッシュに失敗しました", error);
+          }
           setHasLoadedAllComments(true);
         } else {
           console.error("コメント取得エラー:", await response.text());
@@ -147,10 +177,10 @@ export default function MCCard({
       }
     };
 
-    // 次のレンダリングサイクルでフェッチを開始
-    const timerId = setTimeout(fetchAllComments, 50);
+    // 次のレンダリングサイクルでフェッチを開始（遅延を短縮）
+    const timerId = setTimeout(fetchAllComments, 30);
     return () => clearTimeout(timerId); // クリーンアップ関数
-  }, [isExpanded, mc.id, mc.comments, hasLoadedAllComments, isLoadingComments]);
+  }, [isExpanded, mc.id, hasLoadedAllComments, isLoadingComments]); // mc.commentsを依存配列から削除
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-200 w-[400px] flex flex-col">

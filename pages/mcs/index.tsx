@@ -1063,8 +1063,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         },
       },
       orderBy: [{ likesCount: "desc" }, { commentsCount: "desc" }],
-      // ページングを追加して初期データ量を削減
-      take: 20,
+      // 表示数を増加
+      take: 50,
     });
 
     const serializedMcs = mcs.map((mc) => ({

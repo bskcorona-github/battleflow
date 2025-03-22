@@ -23,8 +23,8 @@ if (process.env.NODE_ENV !== "production") {
 
   // 開発環境でのみクエリのパフォーマンスモニタリング
   const prismaEventHandler = (e: Prisma.QueryEvent) => {
-    // 200ms以上かかるクエリのみログ出力（パフォーマンス問題の早期発見）
-    if (e.duration >= 200) {
+    // 100ms以上かかるクエリをログ出力（パフォーマンス問題の早期発見）
+    if (e.duration >= 100) {
       console.log(`slow-query: ${e.duration}ms ${e.query}`);
     }
   };

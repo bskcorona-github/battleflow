@@ -82,7 +82,7 @@ const BATTLE_SUMMIT_CHANNELS = [
 ];
 
 // キャッシュ機能を追加
-const CACHE_DURATION = 5 * 60 * 1000; // 5分間キャッシュを保持
+const CACHE_DURATION = 1 * 60 * 1000; // 1分間だけキャッシュを保持（短縮）
 
 interface CacheItem {
   data: any;
