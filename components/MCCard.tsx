@@ -44,6 +44,7 @@ export default function MCCard({
   // コメント全体を読み込むための状態
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [hasLoadedAllComments, setHasLoadedAllComments] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
 
   // デバッグログは開発環境でのみ出力
   useEffect(() => {
@@ -103,8 +104,8 @@ export default function MCCard({
 
   // コメントキャッシュのキー
   const commentsStorageKey = `mc-comments-${mc.id}`;
-  // キャッシュの有効期限(15分)
-  const CACHE_EXPIRY = 15 * 60 * 1000;
+  // キャッシュの有効期限(5分に短縮)
+  const CACHE_EXPIRY = 5 * 60 * 1000;
 
   // コメント展開時に全コメントを読み込む
   useEffect(() => {
@@ -112,6 +113,7 @@ export default function MCCard({
     if (isExpanded && !hasLoadedAllComments && !isLoadingComments) {
       const fetchAllComments = async () => {
         setIsLoadingComments(true);
+        setLoadingError(false);
 
         // まずSessionStorageからコメントのキャッシュをチェック
         try {
@@ -146,7 +148,10 @@ export default function MCCard({
         try {
           // 遅延ロードとタイムアウト設定
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          const timeoutId = setTimeout(() => {
+            controller.abort();
+            setLoadingError(true);
+          }, 5000); // 5秒に短縮
 
           const response = await fetch(
             `/api/mcs/fetch-comments?mcId=${mc.id}`,
@@ -183,12 +188,15 @@ export default function MCCard({
             setHasLoadedAllComments(true);
           } else {
             console.error("コメント取得エラー:", await response.text());
+            setLoadingError(true);
           }
         } catch (error) {
           if (error instanceof DOMException && error.name === "AbortError") {
             console.error("コメント読み込みがタイムアウトしました");
+            setLoadingError(true);
           } else {
             console.error("コメント読み込みエラー:", error);
+            setLoadingError(true);
           }
         } finally {
           setIsLoadingComments(false);
@@ -198,7 +206,7 @@ export default function MCCard({
       // 遅延読み込みでUIをブロックしないようにする
       const timer = setTimeout(() => {
         fetchAllComments();
-      }, 100);
+      }, 50); // 遅延時間を短縮
 
       return () => clearTimeout(timer);
     }
@@ -330,7 +338,7 @@ export default function MCCard({
                       value={commentContent}
                       onChange={(e) => setCommentContent(e.target.value)}
                       placeholder="コメントを追加..."
-                      className="input flex-1"
+                      className="input flex-1 text-black dark:text-white border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 font-medium"
                     />
                     <button
                       type="submit"
@@ -350,6 +358,15 @@ export default function MCCard({
                   <span className="ml-2 text-gray-600 dark:text-gray-400">
                     コメントを読み込み中...
                   </span>
+                </div>
+              )}
+
+              {/* エラー表示を追加 */}
+              {loadingError && (
+                <div className="text-center py-4">
+                  <p className="text-red-500">
+                    コメントの読み込みに失敗しました
+                  </p>
                 </div>
               )}
 
@@ -425,7 +442,7 @@ export default function MCCard({
                           onChange={(e) =>
                             setEditCommentContent(e.target.value)
                           }
-                          className="textarea w-full"
+                          className="textarea w-full text-black dark:text-white border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 font-medium"
                           rows={3}
                         />
                         <div className="flex gap-2 justify-end">

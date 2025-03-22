@@ -155,7 +155,7 @@ export default function MCComment({
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="コメントを入力..."
-                className="textarea w-full"
+                className="textarea w-full text-black dark:text-white border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800"
                 rows={3}
               />
               <button
@@ -224,7 +224,7 @@ export default function MCComment({
                     <textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
-                      className="textarea w-full"
+                      className="textarea w-full text-black dark:text-white border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800"
                       rows={3}
                     />
                     <div className="flex gap-2 mt-2">

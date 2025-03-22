@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
-import { GetServerSideProps } from "next";
 import { prisma } from "@/lib/prisma";
-import { getSession, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import RankingVoteForm from "@/components/RankingVoteForm";
 import type { MCRank } from "@prisma/client";
 import MCScoreChart from "@/components/MCScoreChart";
@@ -14,6 +13,9 @@ import Link from "next/link";
 import Pagination from "@/components/Pagination";
 import Head from "next/head";
 import SearchBar from "@/components/SearchBar";
+import { GetServerSidePropsContext } from "next";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/pages/api/auth/[...nextauth]";
 
 type Props = {
   mcs: (MCRank & {
@@ -584,200 +586,89 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  // パフォーマンス向上のためにキャッシュヘッダーを設定
-  context.res.setHeader(
-    "Cache-Control",
-    "public, s-maxage=10, stale-while-revalidate=59"
-  );
+export async function getServerSideProps(context: GetServerSidePropsContext) {
+  const session = await getServerSession(context.req, context.res, authOptions);
 
   try {
-    // セッションとMCデータを並列で取得
-    const session = await getSession(context);
+    // パフォーマンス計測開始
+    const startTime = Date.now();
 
-    // ユーザー情報と投票状況を並列で取得
-    let user = null;
-    let votedMCIds: number[] = [];
-
-    if (session?.user?.email) {
-      user = await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: {
-          id: true,
-          isAdmin: true,
-        },
-      });
-
-      // このユーザーが投票済みのMCを取得
-      if (user) {
-        const userVotes = await prisma.vote.findMany({
-          where: {
-            userId: user.id,
-          },
-          select: {
-            mcId: true,
-          },
-        });
-        votedMCIds = userVotes.map((vote) => vote.mcId);
-      }
-    }
-
-    // MCのランキングデータを取得（必要最小限のデータのみ）
-    const mcs = await prisma.mCRank.findMany({
-      select: {
-        id: true,
-        name: true,
-        rhymeScore: true,
-        vibesScore: true,
-        flowScore: true,
-        dialogueScore: true,
-        musicalityScore: true,
-        totalScore: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            votes: true,
-          },
-        },
-        // すべてのコメントを取得
-        comments: {
-          // take制限を削除してすべてのコメントを取得
-          where: {
-            parentId: null,
-          },
-          select: {
-            id: true,
-            content: true,
-            createdAt: true,
-            updatedAt: true,
-            userId: true,
-            mcRankId: true,
-            parentId: true,
+    console.log("ランキングページのMC情報を取得中...");
+    const rankings = await prisma.mCRank.findMany({
+      take: 100, // 表示数を上限100件に制限
+      orderBy: {
+        totalScore: "desc", // currentTotalPointsではなくtotalScoreを使用
+      },
+      include: {
+        mc: true, // MCモデルを含める
+        votes: {
+          include: {
             user: {
               select: {
                 id: true,
                 name: true,
+                email: true,
                 image: true,
-                email: true, // emailも取得（編集・削除権限の判定に必要）
-              },
-            },
-            // 返信コメントも取得
-            replies: {
-              select: {
-                id: true,
-                content: true,
-                createdAt: true,
-                updatedAt: true,
-                userId: true,
-                mcRankId: true,
-                parentId: true,
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    image: true,
-                    email: true, // emailも取得
-                  },
-                },
-              },
-              orderBy: {
-                createdAt: "asc",
               },
             },
           },
-          orderBy: {
-            createdAt: "desc",
+        },
+        comments: {
+          take: 2, // コメント表示数を最適化（2件に減らす）
+          orderBy: { createdAt: "desc" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
           },
         },
       },
-      orderBy: {
-        totalScore: "desc",
-      },
     });
 
-    // シリアライズ処理を最適化
-    const serializedMcs = mcs.map((mc) => {
-      // 必要なプロパティのみを含む新しいオブジェクトを作成
-      const serializedMC = {
-        id: mc.id,
-        name: mc.name,
-        rhymeScore: mc.rhymeScore,
-        vibesScore: mc.vibesScore,
-        flowScore: mc.flowScore,
-        dialogueScore: mc.dialogueScore,
-        musicalityScore: mc.musicalityScore,
-        totalScore: mc.totalScore,
-        voteCount: mc._count.votes,
-        hasVoted: votedMCIds.includes(mc.id),
-        createdAt: mc.createdAt.toISOString(),
-        updatedAt: mc.updatedAt.toISOString(),
-        // コメントと返信コメント情報を含める
-        comments: mc.comments.map((comment) => ({
-          id: comment.id,
-          content: comment.content,
-          createdAt: comment.createdAt.toISOString(),
-          updatedAt: comment.updatedAt.toISOString(),
-          userId: comment.userId,
-          mcId: comment.mcRankId,
-          parentId: comment.parentId,
-          user: {
-            id: comment.user.id,
-            name: comment.user.name,
-            image: comment.user.image,
-            email: comment.user.email, // emailを含める
-          },
-          // 返信コメントを含める
-          replies: comment.replies?.map((reply) => ({
-            id: reply.id,
-            content: reply.content,
-            createdAt: reply.createdAt.toISOString(),
-            updatedAt: reply.updatedAt.toISOString(),
-            userId: reply.userId,
-            mcId: reply.mcRankId,
-            parentId: reply.parentId,
-            user: {
-              id: reply.user.id,
-              name: reply.user.name,
-              image: reply.user.image,
-              email: reply.user.email,
-            },
+    // 処理時間計測
+    const processingTime = Date.now() - startTime;
+    console.log(
+      `ランキングページデータ取得時間: ${processingTime}ms, MC数: ${rankings.length}件`
+    );
+
+    // Prismaの日付をシリアライズ可能な形式に変換
+    const serializedRankings = JSON.parse(
+      JSON.stringify(
+        rankings.map((mcRank) => ({
+          ...mcRank,
+          comments: mcRank.comments.map((comment) => ({
+            ...comment,
+            createdAt: new Date(comment.createdAt).toISOString(),
+            updatedAt: new Date(comment.updatedAt).toISOString(),
           })),
-        })),
-      };
-
-      return serializedMC;
-    });
-
-    // セッション情報も最小限に
-    const optimizedSession =
-      session && user?.id
-        ? {
-            expires: session.expires,
-            user: {
-              id: user.id,
-              name: session.user.name,
-              email: session.user.email,
-              image: session.user.image,
-              isAdmin: user.isAdmin || false,
-            },
-          }
-        : null;
+          // セッションユーザーが投票済みかどうかをチェック
+          hasVoted: mcRank.votes.some(
+            (vote) => vote.userId === session?.user?.id
+          ),
+          voteCount: mcRank.voteCount,
+        }))
+      )
+    );
 
     return {
       props: {
-        mcs: serializedMcs,
-        session: optimizedSession,
+        session,
+        mcs: serializedRankings,
       },
     };
   } catch (error) {
-    console.error("Error fetching MCRanks:", error);
+    console.error("Error fetching MCs for ranking:", error);
     return {
       props: {
+        session,
         mcs: [],
-        session: null,
-        error: "データの取得に失敗しました",
+        error: "MCデータの取得に失敗しました",
       },
     };
   }
-};
+}

@@ -270,7 +270,7 @@ export default function MCDetail({ mc, session }: Props) {
                   >
                     <textarea
                       name="content"
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-black font-medium"
                       rows={3}
                       placeholder="コメントを入力..."
                       required

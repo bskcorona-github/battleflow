@@ -58,7 +58,7 @@ export default function CommentReply({
         value={replyContent}
         onChange={(e) => setReplyContent(e.target.value)}
         placeholder="返信を入力..."
-        className="textarea w-full"
+        className="textarea w-full text-black dark:text-white border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 font-medium"
         rows={2}
         autoFocus
       />

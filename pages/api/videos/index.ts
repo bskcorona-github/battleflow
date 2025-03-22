@@ -132,6 +132,9 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  // パフォーマンス計測開始
+  const startTime = Date.now();
+
   const {
     channelId = "",
     query = "vs",
@@ -154,14 +157,8 @@ export default async function handler(
       : "views";
 
   try {
-    // デバッグ用：すべてのテーブルの件数をカウント
-    const counts = await Promise.all(
-      ALL_TABLE_NAMES.map(async (table) => {
-        const count = await prisma[table].count();
-        return { table, count };
-      })
-    );
-    console.log("データベーステーブル件数:", counts);
+    // デバッグログを削減
+    // console.log("データベーステーブル件数:", counts);
 
     // BATTLE SUMMITの場合は特別な処理
     if (keyword === "BATTLE SUMMIT") {
@@ -265,10 +262,8 @@ export default async function handler(
       // デバッグログ
       console.log(`Request for tab: ${tabName}, channel: ${channelId}`);
 
-      // キャッシュが有効であれば利用（ただし現在は無効化中）
+      // キャッシュが有効であれば利用
       if (isCacheValid(cacheKey)) {
-        console.log(`Using cached videos data for tab: ${tabName}`);
-
         // キャッシュからデータを取得
         const cachedVideos = videoCache[cacheKey].data;
 
@@ -305,8 +300,18 @@ export default async function handler(
         // フィルタリング後の総数
         const filteredTotalCount = filteredCachedVideos.length;
 
+        // ページネーションの適用
+        const paginatedVideos = filteredCachedVideos.slice(
+          (currentPage - 1) * itemsPerPage,
+          currentPage * itemsPerPage
+        );
+
+        // 処理時間計測
+        const processingTime = Date.now() - startTime;
+        console.log(`キャッシュ処理時間: ${processingTime}ms`);
+
         return res.status(200).json({
-          videos: filteredCachedVideos,
+          videos: paginatedVideos,
           pagination: {
             total: filteredTotalCount,
             currentPage,
@@ -430,13 +435,21 @@ export default async function handler(
         timestamp: Date.now(),
       };
 
-      console.log(`Saved ${videos.length} videos to cache for tab: ${tabName}`);
-
       // フィルタリング後の総数を更新
       const filteredTotalCount = filteredVideos.length;
 
+      // ページネーションの適用
+      const paginatedVideos = filteredVideos.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+      );
+
+      // 処理時間計測
+      const processingTime = Date.now() - startTime;
+      console.log(`総処理時間: ${processingTime}ms`);
+
       return res.status(200).json({
-        videos: filteredVideos,
+        videos: paginatedVideos,
         pagination: {
           total: filteredTotalCount,
           currentPage,

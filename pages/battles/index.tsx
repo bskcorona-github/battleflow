@@ -134,6 +134,9 @@ export default function Battles() {
   // クライアントサイドでのみレンダリングするための状態
   const [isMounted, setIsMounted] = useState(false);
 
+  // タイムスタンプを追加
+  const [timestamp, setTimestamp] = useState<string>(Date.now().toString());
+
   // マウント後にのみレンダリングを行うようにする
   useEffect(() => {
     setIsMounted(true);
@@ -177,7 +180,11 @@ export default function Battles() {
   // タイムスタンプを使ってキャッシュを防止
   useEffect(() => {
     if (isMounted) {
-      fetchVideos();
+      // キーワード変更時にタイムスタンプを更新してキャッシュを無効化
+      const newTimestamp = Date.now().toString();
+      setTimestamp(newTimestamp);
+      setPage(1); // キーワード変更時に必ずページをリセット
+      fetchVideos(newTimestamp);
     }
   }, [selectedKeyword, sortOrder, isMounted]);
 
@@ -202,15 +209,16 @@ export default function Battles() {
   };
 
   // ビデオを取得する関数
-  const fetchVideos = async () => {
+  const fetchVideos = async (currentTimestamp = timestamp) => {
     setLoading(true);
     setError(null);
 
     try {
-      // タイムスタンプを追加してキャッシュを防止
-      const timestamp = Date.now();
+      console.log(
+        `キーワード: ${selectedKeyword.name}, タイムスタンプ: ${currentTimestamp}`
+      );
       const response = await fetch(
-        `/api/videos?keyword=${selectedKeyword.name}&query=${selectedKeyword.query}&channelId=${selectedKeyword.channelId}&sortOrder=${sortOrder}&timestamp=${timestamp}`
+        `/api/videos?keyword=${selectedKeyword.name}&query=${selectedKeyword.query}&channelId=${selectedKeyword.channelId}&sortOrder=${sortOrder}&timestamp=${currentTimestamp}`
       );
 
       const data: ApiResponse = await response.json();
@@ -219,6 +227,7 @@ export default function Battles() {
         throw new Error(data.error || "動画の取得に失敗しました");
       }
 
+      console.log(`取得した動画数: ${data.videos.length}件`);
       setAllVideos(data.videos); // すべてのビデオを保存
       updateDisplayedVideos(); // 表示するビデオを更新
     } catch (error) {

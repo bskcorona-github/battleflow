@@ -41,7 +41,7 @@ export default function Comment({ comment, onReply }: CommentProps) {
             <span className="text-base font-bold text-black">
               {comment.user.name}
             </span>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-black">
               {new Date(comment.createdAt).toLocaleDateString()}
             </span>
           </div>
@@ -78,7 +78,7 @@ export default function Comment({ comment, onReply }: CommentProps) {
         </form>
       )}
 
-      {comment.replies?.length > 0 && (
+      {comment.replies && comment.replies.length > 0 && (
         <div className="ml-8 space-y-4">
           {comment.replies.map((reply) => (
             <Comment key={reply.id} comment={reply} onReply={onReply} />

@@ -293,7 +293,7 @@ const MCViewer = ({
                       <textarea
                         name="content"
                         placeholder="コメントを入力..."
-                        className="w-full p-2 border rounded-md"
+                        className="w-full p-2 border rounded-md text-black font-medium"
                         rows={3}
                       />
                       <button
@@ -382,7 +382,7 @@ const MCViewer = ({
                             <textarea
                               value={editContent}
                               onChange={(e) => setEditContent(e.target.value)}
-                              className="w-full p-2 border rounded-md"
+                              className="w-full p-2 border rounded-md text-black font-medium"
                               rows={3}
                             />
                             <div className="flex gap-2 justify-end">
@@ -610,7 +610,7 @@ const MCViewer = ({
                 <textarea
                   name="content"
                   placeholder="コメントを入力..."
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-2 border rounded-md text-black font-medium"
                   rows={3}
                 />
                 <button
@@ -697,7 +697,7 @@ const MCViewer = ({
                       <textarea
                         value={editContent}
                         onChange={(e) => setEditContent(e.target.value)}
-                        className="w-full p-2 border rounded-md"
+                        className="w-full p-2 border rounded-md text-black font-medium"
                         rows={3}
                       />
                       <div className="flex gap-2 justify-end">

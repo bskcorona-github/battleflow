@@ -60,7 +60,7 @@ export default function CommentItem({
             <span className="text-base font-bold text-black">
               {comment.user.name}
             </span>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-black">
               {new Date(comment.createdAt).toLocaleDateString()}
             </span>
           </div>
@@ -85,10 +85,10 @@ export default function CommentItem({
                 返信
               </button>
             )}
-            {comment.replies?.length > 0 && (
+            {comment.replies && comment.replies.length > 0 && (
               <button
                 onClick={() => setShowReplies(!showReplies)}
-                className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                className="flex items-center gap-1 text-sm text-black hover:text-gray-700"
               >
                 <span>{comment.replies.length}件の返信</span>
                 {showReplies ? (
@@ -123,7 +123,7 @@ export default function CommentItem({
         </form>
       )}
 
-      {showReplies && comment.replies?.length > 0 && (
+      {showReplies && comment.replies && comment.replies.length > 0 && (
         <div className="ml-8 space-y-4 border-l-2 border-gray-200 pl-4">
           {comment.replies.map((reply) => (
             <CommentItem
