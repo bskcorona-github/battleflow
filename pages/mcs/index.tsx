@@ -833,88 +833,116 @@ export default function MCList({ mcs: initialMcs }: Props) {
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getSession(context);
+  try {
+    // セッションがある場合、ユーザー情報を取得
+    let user = null;
+    if (session?.user?.email) {
+      user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: {
+          id: true,
+          isAdmin: true,
+        },
+      });
+    }
 
-  // セッションがある場合、ユーザー情報を取得
-  let user = null;
-  if (session?.user?.email) {
-    user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-  }
-
-  const mcs = await prisma.mC.findMany({
-    include: {
-      likes: true,
-      comments: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-              email: true,
-            },
+    const mcs = await prisma.mC.findMany({
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        affiliation: true,
+        description: true,
+        hood: true,
+        likesCount: true,
+        commentsCount: true,
+        createdAt: true,
+        updatedAt: true,
+        likes: session
+          ? {
+              where: {
+                userId: user?.id || "",
+              },
+              select: {
+                id: true,
+                userId: true,
+              },
+            }
+          : false,
+        comments: {
+          orderBy: {
+            createdAt: "desc",
           },
-          replies: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  image: true,
-                  email: true,
-                },
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
+            parentId: true,
+            mcId: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                email: true,
               },
             },
           },
         },
-        where: {
-          parentId: null,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
       },
-    },
-  });
+      orderBy: {
+        likesCount: "desc",
+      },
+    });
 
-  // MCsにisLikedByUserフラグを追加
-  const serializedMcs = mcs.map((mc) => ({
-    ...mc,
-    createdAt: mc.createdAt.toISOString(),
-    updatedAt: mc.updatedAt.toISOString(),
-    isLikedByUser: user
-      ? mc.likes.some((like) => like.userId === user.id)
-      : false,
-    comments: mc.comments.map((comment) => ({
-      ...comment,
-      createdAt: comment.createdAt.toISOString(),
-      updatedAt: comment.updatedAt.toISOString(),
-      replies: comment.replies.map((reply) => ({
-        ...reply,
-        createdAt: reply.createdAt.toISOString(),
-        updatedAt: reply.updatedAt.toISOString(),
+    const serializedMcs = mcs.map((mc) => ({
+      ...mc,
+      isLiked: session ? mc.likes.length > 0 : false,
+      comments: mc.comments.map((comment: any) => ({
+        id: comment.id,
+        content: comment.content,
+        createdAt: comment.createdAt.toISOString(),
+        updatedAt: comment.updatedAt.toISOString(),
+        userId: comment.userId,
+        mcId: comment.mcId,
+        parentId: comment.parentId,
+        user: {
+          id: comment.user.id,
+          name: comment.user.name,
+          image: comment.user.image,
+          email: comment.user.email,
+        },
+        replies: [],
       })),
-    })),
-    likes: mc.likes.map((like) => ({
-      ...like,
-      createdAt: like.createdAt.toISOString(),
-    })),
-  }));
+      createdAt: mc.createdAt.toISOString(),
+      updatedAt: mc.updatedAt.toISOString(),
+    }));
 
-  return {
-    props: {
-      mcs: serializedMcs,
-      session: session
-        ? {
-            ...session,
-            user: {
-              ...session.user,
-              id: user?.id || null,
-            },
-          }
-        : null,
-    },
-  };
+    return {
+      props: {
+        mcs: serializedMcs,
+        session: session
+          ? {
+              ...session,
+              user: {
+                ...session.user,
+                id: user?.id || null,
+                isAdmin: user?.isAdmin || false,
+              },
+            }
+          : null,
+      },
+    };
+  } catch (error) {
+    console.error("Error fetching MCs:", error);
+    return {
+      props: {
+        mcs: [],
+        session: null,
+        error: "データの取得に失敗しました",
+      },
+    };
+  }
 };

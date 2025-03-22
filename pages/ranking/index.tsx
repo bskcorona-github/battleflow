@@ -504,97 +504,129 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getSession(context);
-
-  // セッションがある場合、ユーザー情報を取得
-  let user = null;
-  if (session?.user?.email) {
-    user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: {
-        id: true,
-        isAdmin: true, // isAdminを追加
-      },
-    });
-  }
-
-  const mcs = await prisma.mCRank.findMany({
-    include: {
-      votes: {
+  try {
+    // セッションがある場合、ユーザー情報を取得
+    let user = null;
+    if (session?.user?.email) {
+      user = await prisma.user.findUnique({
+        where: { email: session.user.email },
         select: {
           id: true,
-          mcId: true,
-          userId: true,
-          createdAt: true,
+          isAdmin: true,
         },
-      },
-      comments: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-              email: true,
+      });
+    }
+
+    const mcs = await prisma.mCRank.findMany({
+      select: {
+        id: true,
+        name: true,
+        totalScore: true,
+        rhymeScore: true,
+        vibesScore: true,
+        flowScore: true,
+        dialogueScore: true,
+        musicalityScore: true,
+        createdAt: true,
+        updatedAt: true,
+        votes: session
+          ? {
+              select: {
+                id: true,
+                mcId: true,
+                userId: true,
+                createdAt: true,
+              },
+            }
+          : false,
+        comments: {
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
+            mcRankId: true,
+            parentId: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                email: true,
+              },
             },
           },
-        },
-        orderBy: {
-          createdAt: "desc",
+          orderBy: {
+            createdAt: "desc",
+          },
         },
       },
-    },
-  });
+    });
 
-  // ユーザーの投票履歴を取得
-  const votedMCIds = session
-    ? (
-        await prisma.vote.findMany({
-          where: { userId: session.user.id },
-          select: { mcId: true },
-        })
-      ).map((vote) => vote.mcId)
-    : [];
+    // ユーザーの投票履歴を取得
+    const votedMCIds =
+      session && user
+        ? (
+            await prisma.vote.findMany({
+              where: { userId: user.id },
+              select: { mcId: true },
+            })
+          ).map((vote) => vote.mcId)
+        : [];
 
-  const serializedMcs = mcs.map((mc) => ({
-    ...mc,
-    votes: mc.votes.map((vote) => ({
-      ...vote,
-      createdAt: vote.createdAt.toISOString(),
-    })),
-    hasVoted: votedMCIds.includes(mc.id),
-    comments: mc.comments.map((comment) => ({
-      id: comment.id,
-      content: comment.content,
-      createdAt: comment.createdAt.toISOString(),
-      updatedAt: comment.updatedAt.toISOString(),
-      userId: comment.userId,
-      mcId: comment.mcRankId,
-      parentId: comment.parentId,
-      user: {
-        id: comment.user.id,
-        name: comment.user.name,
-        image: comment.user.image,
-        email: comment.user.email,
+    const serializedMcs = mcs.map((mc) => ({
+      ...mc,
+      votes: mc.votes
+        ? mc.votes.map((vote) => ({
+            ...vote,
+            createdAt: vote.createdAt.toISOString(),
+          }))
+        : [],
+      hasVoted: votedMCIds.includes(mc.id),
+      comments: mc.comments.map((comment) => ({
+        id: comment.id,
+        content: comment.content,
+        createdAt: comment.createdAt.toISOString(),
+        updatedAt: comment.updatedAt.toISOString(),
+        userId: comment.userId,
+        mcId: comment.mcRankId,
+        parentId: comment.parentId,
+        user: {
+          id: comment.user.id,
+          name: comment.user.name,
+          image: comment.user.image,
+          email: comment.user.email,
+        },
+        replies: [],
+      })),
+      createdAt: mc.createdAt.toISOString(),
+      updatedAt: mc.updatedAt.toISOString(),
+    }));
+
+    return {
+      props: {
+        mcs: serializedMcs,
+        session: session
+          ? {
+              ...session,
+              user: {
+                ...session.user,
+                id: user?.id || null,
+                isAdmin: user?.isAdmin || false,
+              },
+            }
+          : null,
       },
-      replies: [],
-    })) as CommentWithUser[],
-    createdAt: mc.createdAt.toISOString(),
-    updatedAt: mc.updatedAt.toISOString(),
-  }));
-
-  return {
-    props: {
-      mcs: serializedMcs,
-      session: session
-        ? {
-            ...session,
-            user: {
-              ...session.user,
-              id: user?.id || null,
-              isAdmin: user?.isAdmin || false, // isAdminを追加
-            },
-          }
-        : null,
-    },
-  };
+    };
+  } catch (error) {
+    console.error("Error fetching MCRanks:", error);
+    return {
+      props: {
+        mcs: [],
+        session: null,
+        error: "データの取得に失敗しました",
+      },
+    };
+  }
 };

@@ -24,28 +24,45 @@ export default function App({
       return;
     }
 
-    // ページビューを記録
+    // ページロードが完了してから記録する
     const recordPageView = async () => {
       try {
-        const response = await fetch("/api/pageviews", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            path: router.pathname || "/",
-          }),
-        });
-
-        if (!response.ok) {
-          console.error("Failed to record page view:", await response.text());
+        // ウィンドウのロードが完了したタイミングで実行
+        if (document.readyState === "complete") {
+          await fetch("/api/pageviews", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              path: router.pathname || "/",
+            }),
+          });
+        } else {
+          // ロード完了を待つ
+          window.addEventListener(
+            "load",
+            async () => {
+              await fetch("/api/pageviews", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  path: router.pathname || "/",
+                }),
+              });
+            },
+            { once: true }
+          );
         }
       } catch (error) {
         console.error("Error recording page view:", error);
       }
     };
 
-    recordPageView();
+    // メインコンテンツのレンダリング後に非同期で記録
+    setTimeout(recordPageView, 0);
   }, [router.pathname]);
 
   return (

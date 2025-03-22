@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
+import { getSession } from "next-auth/react";
 import { prisma } from "@/lib/prisma";
 import { PrismaClient } from "@prisma/client";
+import type { Video } from "../../../types/video";
 
 // テーブル名の型定義
 type TableName =
@@ -78,6 +80,29 @@ const BATTLE_SUMMIT_CHANNELS = [
   "UCIgphXLgxlCYYpx2Py2bTjA",
   "UC2UCB_L3Kh6Kv5pL3pJZFlA",
 ];
+
+// キャッシュ機能を追加
+const CACHE_DURATION = 5 * 60 * 1000; // 5分間キャッシュを保持
+
+interface CacheItem {
+  data: any;
+  timestamp: number;
+}
+
+// メモリキャッシュの実装
+const videoCache: Record<string, CacheItem> = {};
+
+// キャッシュキーの生成
+const getCacheKey = (queryOptions: any): string => {
+  return JSON.stringify(queryOptions);
+};
+
+// キャッシュの有効性チェック
+const isCacheValid = (cacheKey: string): boolean => {
+  if (!videoCache[cacheKey]) return false;
+  const now = Date.now();
+  return now - videoCache[cacheKey].timestamp < CACHE_DURATION;
+};
 
 export default async function handler(
   req: NextApiRequest,
@@ -167,23 +192,52 @@ export default async function handler(
     // 動的にテーブルを選択してデータを取得（型安全に）
     const model = getTableModel(prisma, tableName);
     const totalCount = await model.count();
-    const videos = await model.findMany(queryOptions);
 
-    // キーワードでフィルタリング
-    if (keyword) {
-      const filteredVideos = videos.filter((video: Video) => {
-        const title = video.title.toLowerCase();
-        const keywords = (keyword as string)
-          .toLowerCase()
-          .split(/[,\s]+/)
-          .filter((k) => k.length > 0);
+    if (req.method === "GET") {
+      // キャッシュキーの生成
+      const cacheKey = getCacheKey(queryOptions);
 
-        if (keywords.length === 0) {
-          return true;
-        }
+      // キャッシュが有効であれば利用
+      if (isCacheValid(cacheKey)) {
+        console.log("Using cached videos data");
+        return res.status(200).json({
+          videos: videoCache[cacheKey].data,
+          pagination: {
+            total: totalCount,
+            currentPage,
+            totalPages: Math.ceil(totalCount / itemsPerPage),
+            hasNextPage: currentPage * itemsPerPage < totalCount,
+            hasPreviousPage: currentPage > 1,
+          },
+        });
+      }
 
-        return keywords.some((k) => title.includes(k));
-      });
+      // データベースから取得
+      const videos = await model.findMany(queryOptions);
+
+      // キーワードでフィルタリング
+      let filteredVideos = videos;
+      if (keyword) {
+        filteredVideos = videos.filter((video: Video) => {
+          const title = video.title.toLowerCase();
+          const keywords = (keyword as string)
+            .toLowerCase()
+            .split(/[,\s]+/)
+            .filter((k) => k.length > 0);
+
+          if (keywords.length === 0) {
+            return true;
+          }
+
+          return keywords.some((k) => title.includes(k));
+        });
+      }
+
+      // 結果をキャッシュに保存
+      videoCache[cacheKey] = {
+        data: filteredVideos,
+        timestamp: Date.now(),
+      };
 
       return res.status(200).json({
         videos: filteredVideos,
@@ -197,16 +251,7 @@ export default async function handler(
       });
     }
 
-    return res.status(200).json({
-      videos,
-      pagination: {
-        total: totalCount,
-        currentPage,
-        totalPages: Math.ceil(totalCount / itemsPerPage),
-        hasNextPage: currentPage * itemsPerPage < totalCount,
-        hasPreviousPage: currentPage > 1,
-      },
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   } catch (error) {
     console.error("Error fetching videos:", error);
     return res.status(500).json({
