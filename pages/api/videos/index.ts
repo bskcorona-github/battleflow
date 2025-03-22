@@ -95,7 +95,7 @@ const BATTLE_SUMMIT_CHANNELS = [
 ];
 
 // キャッシュ機能の無効化（常に最新データを取得するため）
-const CACHE_DURATION = 0; // キャッシュを無効化
+const CACHE_DURATION = 60 * 1000; // 1分間キャッシュを有効にする
 
 interface CacheItem {
   data: any;
