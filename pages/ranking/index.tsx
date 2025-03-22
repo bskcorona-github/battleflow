@@ -12,6 +12,7 @@ import MCComment from "@/components/MCComment";
 import type { CommentWithUser } from "@/types/mc";
 import Link from "next/link";
 import Pagination from "@/components/Pagination";
+import Head from "next/head";
 
 type Props = {
   mcs: (MCRank & {
@@ -284,6 +285,20 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-100 py-6">
+      <Head>
+        <title>
+          MCバトル公式ランキング | 日本人気ラッパー最新評価・投票 |
+          MCバトルビューワー
+        </title>
+        <meta
+          name="description"
+          content="日本最大のMCバトル選手ランキング！ファン投票による最新の人気MC評価を「韻」「フロー」「バイブス」「対話力」「音楽性」の5項目で分析。あなたの推しMCに投票して応援しよう！UMB、フリスタ出場者など多数掲載。"
+        />
+        <meta
+          name="keywords"
+          content="MCバトル,MCランキング,人気ラッパー,日本語ラップ,MCバトル投票,フリースタイルバトル,ヒップホップ,UMB,フリースタイルダンジョン,韻,フロー"
+        />
+      </Head>
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold text-gray-800">MCランキング</h1>

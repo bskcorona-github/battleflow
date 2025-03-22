@@ -10,6 +10,7 @@ import { toast } from "react-hot-toast";
 import CommentReply from "@/components/CommentReply";
 import DOMPurify from "isomorphic-dompurify";
 import Pagination from "@/components/Pagination";
+import Head from "next/head";
 
 type Props = {
   mcs: MCWithLikesAndComments[];
@@ -895,6 +896,20 @@ export default function MCList({ mcs: initialMcs }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      <Head>
+        <title>
+          MCバトル選手一覧 | 人気ラッパープロフィール・最新情報 |
+          MCバトルビューワー
+        </title>
+        <meta
+          name="description"
+          content="日本全国のMCバトル出場選手プロフィール一覧。UMB、フリースタイルダンジョン、高校生ラップ選手権などの人気大会出場者のプロフィール、活動情報、ファン評価を掲載。お気に入りのMCにいいね・コメントで応援しよう！"
+        />
+        <meta
+          name="keywords"
+          content="MCバトル,MC一覧,バトルMC,ラッパー,日本語ラップ,UMB,フリースタイルダンジョン,プロフィール,人気ランキング,フリースタイル"
+        />
+      </Head>
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800">MC一覧</h1>

@@ -1,11 +1,12 @@
-import { NextApiRequest, NextApiResponse } from "next";
+import { GetServerSideProps } from "next";
 import { prisma } from "@/lib/prisma";
 
-// サイトマップXMLを動的に生成するAPIルート
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+function SiteMap() {
+  // ダミーコンポーネント - getServerSidePropsのみが実行される
+  return null;
+}
+
+export const getServerSideProps: GetServerSideProps = async ({ res }) => {
   try {
     // 日付フォーマットヘルパー関数
     const formatDate = (date: Date) => {
@@ -70,9 +71,19 @@ export default async function handler(
     // XML形式でレスポンスを返す
     res.setHeader("Content-Type", "application/xml");
     res.setHeader("Cache-Control", "public, max-age=86400"); // 24時間キャッシュ
-    res.status(200).send(xml);
+    res.write(xml);
+    res.end();
+
+    return {
+      props: {},
+    };
   } catch (error) {
     console.error("Error generating sitemap:", error);
-    res.status(500).json({ error: "Failed to generate sitemap" });
+    return {
+      props: {},
+      notFound: true,
+    };
   }
-}
+};
+
+export default SiteMap;

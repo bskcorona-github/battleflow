@@ -109,45 +109,48 @@ export default function App({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#000000" />
         <title>
-          MCバトル | 日本の最新バトル結果・選手情報を網羅 - MCバトルビューワー
+          MCバトル公式 | 日本最大のバトルMC情報サイト - MCバトルビューワー
         </title>
         <meta
           name="description"
-          content="日本国内のMCバトル大会の最新結果、選手情報、ランキングを簡単に閲覧できる専門プラットフォーム。UMB、フリースタイルダンジョン、KING OF KINGSなど主要なMCバトル情報を随時更新中。"
+          content="日本最大のMCバトル情報プラットフォーム。UMB、フリースタイルダンジョン、KING OF KINGSなど全国のバトルMC、ラップバトル最新結果とランキングをリアルタイムで更新。ユーザー評価による独自のMCランキングも公開中。"
         />
         <meta
           name="keywords"
-          content="MCバトル,フリースタイルバトル,UMB,フリースタイルダンジョン,日本語ラップ,ヒップホップ,ラップバトル"
+          content="MCバトル,MCバトル大会,フリースタイルバトル,UMB,フリースタイルダンジョン,高校生ラップ選手権,KING OF KINGS,日本語ラップ,ヒップホップ,ラップバトル,バトルMC"
         />
         <meta
           property="og:title"
-          content="MCバトル情報総合サイト - MCバトルビューワー"
+          content="MCバトル公式 | 日本最大のバトルMC情報・ランキングサイト - MCバトルビューワー"
         />
         <meta
           property="og:description"
-          content="MCバトルの全てがここに。最新のバトル結果、選手情報、ランキングをリアルタイムで提供する日本最大のMCバトル情報プラットフォーム。"
+          content="日本最大級のMCバトルデータベース。UMB、フリースタイルダンジョン、高校生ラップ選手権など主要大会の最新情報とMCランキングをファン評価で公開。あなたの好きなMCを応援しよう！"
         />
         <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="MCバトルビューワー" />
+        <meta
+          property="og:site_name"
+          content="MCバトルビューワー（BattleFlow）"
+        />
         <meta
           property="og:image"
-          content="https://your-domain.com/og-image.jpg"
+          content="https://battleflow.vercel.app/og-image.jpg"
         />
-        <meta property="og:url" content="https://your-domain.com" />
+        <meta property="og:url" content="https://battleflow.vercel.app" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta
           name="twitter:title"
-          content="MCバトル情報総合サイト - MCバトルビューワー"
+          content="MCバトル公式 | 日本最大のバトルMC情報・ランキングサイト"
         />
         <meta
           name="twitter:description"
-          content="日本の最新MCバトル結果、選手情報、ランキングを提供する総合プラットフォーム"
+          content="日本最大級のMCバトルデータベース。全国の人気MC最新情報、ファン投票による独自ランキング、試合結果をリアルタイムで更新中！"
         />
         <meta
           name="twitter:image"
-          content="https://your-domain.com/twitter-card.jpg"
+          content="https://battleflow.vercel.app/twitter-card.jpg"
         />
-        <link rel="canonical" href="https://your-domain.com" />
+        <link rel="canonical" href="https://battleflow.vercel.app" />
       </Head>
       <Navigation />
       <Component {...pageProps} />
