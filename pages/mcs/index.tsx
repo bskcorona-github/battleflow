@@ -66,12 +66,57 @@ const MCViewer = ({
   const { data: sessionData } = useSession();
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [hasLoadedAllComments, setHasLoadedAllComments] = useState(false);
 
   // HTMLをサニタイズして安全にレンダリングする関数
   const createSanitizedHTML = (html: string) => {
     const sanitizedHTML = DOMPurify.sanitize(html);
     return { __html: sanitizedHTML };
   };
+
+  // コメント展開時に全コメントを読み込む
+  useEffect(() => {
+    const isExpanded = expandedComments.includes(mc.id);
+    if (
+      isExpanded &&
+      mc.comments.length > 0 &&
+      !hasLoadedAllComments &&
+      !isLoadingComments
+    ) {
+      const fetchAllComments = async () => {
+        setIsLoadingComments(true);
+        try {
+          const response = await fetch(`/api/mcs/fetch-comments?mcId=${mc.id}`);
+          if (response.ok) {
+            const comments = await response.json();
+            // MCsの状態を更新
+            setMcs((prevMcs) =>
+              prevMcs.map((prevMc) =>
+                prevMc.id === mc.id ? { ...prevMc, comments } : prevMc
+              )
+            );
+            setHasLoadedAllComments(true);
+          } else {
+            console.error("コメント取得エラー:", await response.text());
+          }
+        } catch (error) {
+          console.error("コメント読み込みエラー:", error);
+        } finally {
+          setIsLoadingComments(false);
+        }
+      };
+
+      fetchAllComments();
+    }
+  }, [
+    expandedComments,
+    mc.id,
+    mc.comments.length,
+    hasLoadedAllComments,
+    isLoadingComments,
+    setMcs,
+  ]);
 
   // テーブル表示の場合のJSXを修正
   if (viewMode === "table") {
@@ -247,6 +292,16 @@ const MCViewer = ({
                         コメントを投稿
                       </button>
                     </form>
+                  </div>
+                )}
+
+                {/* コメント読み込み中の表示 */}
+                {isLoadingComments && (
+                  <div className="flex justify-center items-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                    <span className="ml-2 text-gray-600">
+                      コメントを読み込み中...
+                    </span>
                   </div>
                 )}
 
@@ -900,6 +955,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       });
     }
 
+    // データを一度に取得するのではなく、必要な情報のみ取得
     const mcs = await prisma.mC.findMany({
       select: {
         id: true,
@@ -919,13 +975,19 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
               },
               select: {
                 id: true,
-                userId: true,
               },
+              take: 1, // ユーザーがいいねしているかどうかだけ確認するため、最大1件のみ取得
             }
           : false,
+        // コメントはそれぞれのMCカードを開いたときに非同期で取得するよう変更
+        // 初期表示では最新5件のみ取得する
         comments: {
           orderBy: {
             createdAt: "desc",
+          },
+          take: 5, // 最新の5件のみ取得
+          where: {
+            parentId: null, // 親コメントのみ取得（返信は含めない）
           },
           select: {
             id: true,
@@ -954,7 +1016,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     const serializedMcs = mcs.map((mc) => ({
       ...mc,
       isLikedByUser: session ? mc.likes.length > 0 : false,
-      comments: mc.comments.map((comment: any) => ({
+      comments: mc.comments.map((comment: CommentWithUser) => ({
         id: comment.id,
         content: comment.content,
         createdAt: comment.createdAt.toISOString(),
@@ -968,7 +1030,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           image: comment.user.image,
           email: comment.user.email,
         },
-        replies: [],
+        replies: [], // 返信は初期表示では空の配列とする
       })),
       createdAt: mc.createdAt.toISOString(),
       updatedAt: mc.updatedAt.toISOString(),

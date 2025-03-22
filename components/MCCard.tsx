@@ -89,6 +89,47 @@ export default function MCCard({
     return session?.user?.email === comment.user.email;
   };
 
+  // コメント全体を読み込むための状態
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [hasLoadedAllComments, setHasLoadedAllComments] = useState(false);
+
+  // コメント展開時に全コメントを読み込む
+  useEffect(() => {
+    if (
+      isExpanded &&
+      mc.comments.length > 0 &&
+      !hasLoadedAllComments &&
+      !isLoadingComments
+    ) {
+      const fetchAllComments = async () => {
+        setIsLoadingComments(true);
+        try {
+          const response = await fetch(`/api/mcs/fetch-comments?mcId=${mc.id}`);
+          if (response.ok) {
+            const comments = await response.json();
+            // 既存のコメントを全てのコメントで置き換える
+            mc.comments = comments;
+            setHasLoadedAllComments(true);
+          } else {
+            console.error("コメント取得エラー:", await response.text());
+          }
+        } catch (error) {
+          console.error("コメント読み込みエラー:", error);
+        } finally {
+          setIsLoadingComments(false);
+        }
+      };
+
+      fetchAllComments();
+    }
+  }, [
+    isExpanded,
+    mc.id,
+    mc.comments.length,
+    hasLoadedAllComments,
+    isLoadingComments,
+  ]);
+
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-200 w-[400px] flex flex-col">
       <div className="relative h-[280px] bg-gray-200 flex-shrink-0">
@@ -194,6 +235,16 @@ export default function MCCard({
                     </button>
                   </div>
                 </form>
+              )}
+
+              {/* コメント読み込み中の表示 */}
+              {isLoadingComments && (
+                <div className="flex justify-center items-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                  <span className="ml-2 text-gray-600">
+                    コメントを読み込み中...
+                  </span>
+                </div>
               )}
 
               {/* コメント一覧 */}
