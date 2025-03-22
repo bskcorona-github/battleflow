@@ -719,6 +719,9 @@ export default function MCList({ mcs: initialMcs }: Props) {
     );
 
     try {
+      // オプティミスティックUI更新をするための処理がすでに上部で完了しているので、
+      // ここからはバックエンドとの同期処理を行う
+
       // デバウンスのためにリクエスト発行を少し遅延
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒タイムアウト
@@ -736,15 +739,20 @@ export default function MCList({ mcs: initialMcs }: Props) {
 
       clearTimeout(timeoutId);
 
+      // レスポンスデータを取得
+      const data = await response
+        .json()
+        .catch(() => ({ error: "レスポンスの解析に失敗しました" }));
+
       if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ error: "いいねの処理に失敗しました" }));
-        throw new Error(errorData.error || "いいねの処理に失敗しました");
+        // ステータスコードが200系でない場合
+        throw new Error(data.error || "いいねの処理に失敗しました");
       }
 
+      // サーバー側でユニーク制約エラーが正常に処理されていれば、
+      // data.liked と data.likesCount が提供される
+
       // APIレスポンスで正確な値に更新
-      const data = await response.json();
       setMcs((prevMcs) =>
         prevMcs.map((mc) =>
           mc.id === mcId
@@ -756,6 +764,11 @@ export default function MCList({ mcs: initialMcs }: Props) {
             : mc
         )
       );
+
+      // ユーザーにフィードバックを表示
+      if (data.message) {
+        toast.success(data.message);
+      }
     } catch (error) {
       console.error("Error liking MC:", error);
       // エラー時は元の状態に戻す

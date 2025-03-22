@@ -67,13 +67,29 @@ export default async function handler(
         msg = "いいねを取り消しました";
         isLiked = false;
       } else {
-        // いいねを作成
-        await tx.like.create({
-          data: {
-            mcId: parsedMcId,
-            userId: session.user.id,
-          },
-        });
+        // いいねを作成（重複がないことを再確認）
+        try {
+          await tx.like.create({
+            data: {
+              mcId: parsedMcId,
+              userId: session.user.id,
+            },
+          });
+        } catch (err) {
+          // ユニーク制約エラーが発生した場合は既に存在するとみなす
+          console.warn("いいねの作成中にエラーが発生しました:", err);
+          const errMsg = err instanceof Error ? err.message : "";
+
+          // 重複エラーの場合は正常に処理を続行
+          if (errMsg.includes("Unique constraint failed")) {
+            console.log(
+              "ユーザーはすでにいいねしているため、処理をスキップします"
+            );
+          } else {
+            // その他のエラーは再スロー
+            throw err;
+          }
+        }
 
         msg = "いいねしました";
         isLiked = true;
@@ -104,6 +120,46 @@ export default async function handler(
     // エラーメッセージをより具体的に
     const errorMessage =
       error instanceof Error ? error.message : "いいねの処理に失敗しました";
+
+    // ユニーク制約エラーの場合は適切なレスポンスを返す
+    if (errorMessage.includes("Unique constraint failed")) {
+      // セッションを再取得
+      const currentSession = await getServerSession(req, res, authOptions);
+      if (!currentSession || !currentSession.user || !currentSession.user.id) {
+        return res.status(401).json({ error: "認証が必要です" });
+      }
+
+      // 既存のいいねを取得
+      try {
+        const existingLike = await prisma.like.findFirst({
+          where: {
+            mcId: parseInt(req.body.mcId, 10),
+            userId: currentSession.user.id,
+          },
+        });
+
+        if (existingLike) {
+          // 既存のいいねが見つかった場合、MC情報を取得
+          const mc = await prisma.mC.findUnique({
+            where: {
+              id: parseInt(req.body.mcId, 10),
+            },
+            select: {
+              likesCount: true,
+            },
+          });
+
+          return res.status(200).json({
+            message: "すでにいいねしています",
+            liked: true,
+            likesCount: mc?.likesCount || 0,
+          });
+        }
+      } catch (secondError) {
+        console.error("Error handling duplicate like:", secondError);
+      }
+    }
+
     return res.status(500).json({ error: errorMessage });
   }
 }
