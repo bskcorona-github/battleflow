@@ -547,7 +547,7 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getSession(context);
   try {
-    // セッションがある場合、ユーザー情報を取得
+    // セッションがある場合、ユーザー情報を取得（クエリを一度に最適化）
     let user = null;
     if (session?.user?.email) {
       user = await prisma.user.findUnique({
@@ -559,6 +559,18 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       });
     }
 
+    // 投票履歴を効率的に先取得（MCRankと同時に取得しないことで個別のクエリを最適化）
+    const votedMCIds =
+      session && user?.id
+        ? (
+            await prisma.vote.findMany({
+              where: { userId: user.id },
+              select: { mcId: true },
+            })
+          ).map((vote) => vote.mcId)
+        : [];
+
+    // MCRankの取得とLOADクエリを最適化（必要最小限のデータのみを選択）
     const mcs = await prisma.mCRank.findMany({
       select: {
         id: true,
@@ -571,17 +583,15 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         musicalityScore: true,
         createdAt: true,
         updatedAt: true,
-        votes: session
-          ? {
-              select: {
-                id: true,
-                mcId: true,
-                userId: true,
-                createdAt: true,
-              },
-            }
-          : false,
+        // 投票情報はサーバー側で処理して、クライアントには最低限の情報だけ渡す
+        _count: {
+          select: {
+            votes: true,
+          },
+        },
+        // 初期表示時には一部のコメントのみ取得して負荷を軽減
         comments: {
+          take: 3, // 初期表示では最新3件のみ表示
           select: {
             id: true,
             content: true,
@@ -602,29 +612,21 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           orderBy: {
             createdAt: "desc",
           },
+          where: {
+            parentId: null, // 親コメントのみ取得（返信は必要時に非同期読み込み）
+          },
         },
+      },
+      orderBy: {
+        totalScore: "desc", // 合計スコアでソート
       },
     });
 
-    // ユーザーの投票履歴を取得
-    const votedMCIds =
-      session && user
-        ? (
-            await prisma.vote.findMany({
-              where: { userId: user.id },
-              select: { mcId: true },
-            })
-          ).map((vote) => vote.mcId)
-        : [];
-
     const serializedMcs = mcs.map((mc) => ({
       ...mc,
-      votes: mc.votes
-        ? mc.votes.map((vote) => ({
-            ...vote,
-            createdAt: vote.createdAt.toISOString(),
-          }))
-        : [],
+      // 投票数をクライアントに渡す
+      voteCount: mc._count.votes,
+      // 該当ユーザーが投票済みかどうかのフラグ
       hasVoted: votedMCIds.includes(mc.id),
       comments: mc.comments.map((comment) => ({
         id: comment.id,
@@ -640,7 +642,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           image: comment.user.image,
           email: comment.user.email,
         },
-        replies: [],
+        replies: [], // 返信は初期状態では空配列（必要時に非同期で取得）
       })),
       createdAt: mc.createdAt.toISOString(),
       updatedAt: mc.updatedAt.toISOString(),
@@ -649,16 +651,17 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     return {
       props: {
         mcs: serializedMcs,
-        session: session
-          ? {
-              ...session,
-              user: {
-                ...session.user,
-                id: user?.id || null,
-                isAdmin: user?.isAdmin || false,
-              },
-            }
-          : null,
+        session:
+          session && user?.id
+            ? {
+                ...session,
+                user: {
+                  ...session.user,
+                  id: user.id, // nullチェック済みなのでアクセス可能
+                  isAdmin: user.isAdmin || false,
+                },
+              }
+            : null,
       },
     };
   } catch (error) {

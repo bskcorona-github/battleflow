@@ -39,12 +39,18 @@ export default function MCCard({
   // showCommentsの状態をexpandedCommentsから取得
   const isExpanded = expandedComments.includes(mc.id);
 
-  useEffect(() => {
-    console.log("Initial comments:", mc.comments);
-    console.log("Processed comments:", mc.comments);
-  }, [mc.comments]);
+  // コメント全体を読み込むための状態
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [hasLoadedAllComments, setHasLoadedAllComments] = useState(false);
 
-  const handleLikeClick = async () => {
+  // デバッグログは開発環境でのみ出力
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      console.log("MC Card rendered:", mc.id);
+    }
+  }, [mc.id]);
+
+  const handleLikeClick = () => {
     if (!session) {
       toast.error("いいねするにはログインが必要です");
       return;
@@ -56,23 +62,8 @@ export default function MCCard({
       return;
     }
 
-    // 楽観的UIアップデート - ここですぐに画面を更新
-    const wasLiked = mc.isLikedByUser;
-    const newLikesCount = mc.likesCount + (wasLiked ? -1 : 1);
-    mc.isLikedByUser = !wasLiked;
-    mc.likesCount = newLikesCount;
-
-    try {
-      await onLike(mc.id);
-    } catch (error) {
-      // エラー時は元に戻す
-      mc.isLikedByUser = wasLiked;
-      mc.likesCount = mc.likesCount + (wasLiked ? 1 : -1);
-      console.error("Error liking MC:", error);
-      toast.error(
-        error instanceof Error ? error.message : "いいねの処理に失敗しました"
-      );
-    }
+    // 親コンポーネントに処理を委任
+    onLike(mc.id);
   };
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
@@ -108,63 +99,58 @@ export default function MCCard({
     return session?.user?.email === comment.user.email;
   };
 
-  // コメント全体を読み込むための状態
-  const [isLoadingComments, setIsLoadingComments] = useState(false);
-  const [hasLoadedAllComments, setHasLoadedAllComments] = useState(false);
-
   // コメント展開時に全コメントを読み込む
   useEffect(() => {
+    // コメントが表示されておらず、まだロード済みでない場合は何もしない
     if (
-      isExpanded &&
-      mc.comments.length > 0 &&
-      !hasLoadedAllComments &&
-      !isLoadingComments
+      !isExpanded ||
+      hasLoadedAllComments ||
+      isLoadingComments ||
+      mc.comments.length === 0
     ) {
-      const fetchAllComments = async () => {
-        setIsLoadingComments(true);
-        try {
-          // controller for aborting fetch if component unmounts
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒タイムアウト
-
-          const response = await fetch(
-            `/api/mcs/fetch-comments?mcId=${mc.id}`,
-            {
-              signal: controller.signal,
-            }
-          );
-
-          clearTimeout(timeoutId);
-
-          if (response.ok) {
-            const comments = await response.json();
-            // 既存のコメントを全てのコメントで置き換える
-            mc.comments = comments;
-            setHasLoadedAllComments(true);
-          } else {
-            console.error("コメント取得エラー:", await response.text());
-          }
-        } catch (error) {
-          // AbortErrorは無視
-          if (error instanceof DOMException && error.name === "AbortError") {
-            console.log("コメント読み込みを中断しました");
-          } else {
-            console.error("コメント読み込みエラー:", error);
-          }
-        } finally {
-          setIsLoadingComments(false);
-        }
-      };
-
-      fetchAllComments();
+      return;
     }
-  }, [
-    isExpanded,
-    mc.id,
-    mc.comments.length,
-    hasLoadedAllComments,
-    isLoadingComments,
-  ]);
+
+    const fetchAllComments = async () => {
+      setIsLoadingComments(true);
+      try {
+        // コントローラを作成して10秒でタイムアウトするように設定
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(`/api/mcs/fetch-comments?mcId=${mc.id}`, {
+          signal: controller.signal,
+          headers: {
+            "Cache-Control": "max-age=120", // 2分間キャッシュを有効に
+          },
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const comments = await response.json();
+          // 既存のコメントを全てのコメントで置き換える
+          mc.comments = comments;
+          setHasLoadedAllComments(true);
+        } else {
+          console.error("コメント取得エラー:", await response.text());
+        }
+      } catch (error) {
+        // AbortErrorは無視
+        if (error instanceof DOMException && error.name === "AbortError") {
+          console.log("コメント読み込みを中断しました");
+        } else {
+          console.error("コメント読み込みエラー:", error);
+        }
+      } finally {
+        setIsLoadingComments(false);
+      }
+    };
+
+    // 次のレンダリングサイクルでフェッチを開始
+    const timerId = setTimeout(fetchAllComments, 50);
+    return () => clearTimeout(timerId); // クリーンアップ関数
+  }, [isExpanded, mc.id, mc.comments, hasLoadedAllComments, isLoadingComments]);
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-200 w-[400px] flex flex-col">

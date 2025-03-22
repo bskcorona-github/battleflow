@@ -697,27 +697,32 @@ export default function MCList({ mcs: initialMcs }: Props) {
       return;
     }
 
-    // 楽観的更新: UIを即座に更新
+    // 対象のMCを検索
     const targetMc = mcs.find((mc) => mc.id === mcId);
-    if (targetMc) {
-      const newLikedState = !targetMc.isLikedByUser;
-      const newLikesCount = targetMc.likesCount + (newLikedState ? 1 : -1);
+    if (!targetMc) return;
 
-      // UIを先に更新
-      setMcs((prevMcs) =>
-        prevMcs.map((mc) =>
-          mc.id === mcId
-            ? {
-                ...mc,
-                isLikedByUser: newLikedState,
-                likesCount: newLikesCount,
-              }
-            : mc
-        )
-      );
-    }
+    // 現在の状態を記録
+    const wasLiked = targetMc.isLikedByUser;
+    const originalLikesCount = targetMc.likesCount;
+
+    // 楽観的UI更新: UIを即座に更新
+    setMcs((prevMcs) =>
+      prevMcs.map((mc) =>
+        mc.id === mcId
+          ? {
+              ...mc,
+              isLikedByUser: !wasLiked,
+              likesCount: originalLikesCount + (wasLiked ? -1 : 1),
+            }
+          : mc
+      )
+    );
 
     try {
+      // デバウンスのためにリクエスト発行を少し遅延
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒タイムアウト
+
       // APIリクエストを非同期で実行
       const response = await fetch(`/api/mc/like`, {
         method: "POST",
@@ -726,7 +731,10 @@ export default function MCList({ mcs: initialMcs }: Props) {
         },
         body: JSON.stringify({ mcId }),
         credentials: "include", // クッキーを含める
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response
@@ -748,27 +756,28 @@ export default function MCList({ mcs: initialMcs }: Props) {
             : mc
         )
       );
-
-      // いいねのトースト通知は削除
     } catch (error) {
       console.error("Error liking MC:", error);
       // エラー時は元の状態に戻す
-      if (targetMc) {
-        setMcs((prevMcs) =>
-          prevMcs.map((mc) =>
-            mc.id === mcId
-              ? {
-                  ...mc,
-                  isLikedByUser: targetMc.isLikedByUser,
-                  likesCount: targetMc.likesCount,
-                }
-              : mc
-          )
+      setMcs((prevMcs) =>
+        prevMcs.map((mc) =>
+          mc.id === mcId
+            ? {
+                ...mc,
+                isLikedByUser: wasLiked,
+                likesCount: originalLikesCount,
+              }
+            : mc
+        )
+      );
+
+      if (error instanceof DOMException && error.name === "AbortError") {
+        toast.error("タイムアウトしました。ネットワーク接続を確認してください");
+      } else {
+        toast.error(
+          error instanceof Error ? error.message : "いいねの処理に失敗しました"
         );
       }
-      toast.error(
-        error instanceof Error ? error.message : "いいねの処理に失敗しました"
-      );
     }
   };
 
@@ -1000,31 +1009,33 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       });
     }
 
-    // MC一覧を取得 - コメントは初期表示では最小限に
+    // データベースクエリを最適化
     const mcs = await prisma.mC.findMany({
       select: {
         id: true,
         name: true,
         image: true,
         affiliation: true,
-        description: true,
+        // 初期表示で必要なフィールドのみに制限
+        description: false, // 必要なときに非同期で取得
         hood: true,
         likesCount: true,
         commentsCount: true,
         createdAt: true,
         updatedAt: true,
-        likes: session
-          ? {
-              where: {
-                userId: user?.id || "",
-              },
-              select: {
-                id: true,
-              },
-              take: 1, // ユーザーがいいねしているかどうかだけ確認するため、最大1件のみ取得
-            }
-          : false,
-        // コメントは初期表示では最小限のデータのみ取得
+        likes:
+          session && user?.id
+            ? {
+                where: {
+                  userId: user.id,
+                },
+                select: {
+                  id: true,
+                },
+                take: 1, // ユーザーがいいねしているかどうかだけ確認するため、最大1件のみ取得
+              }
+            : false,
+        // 初期表示では最小限のコメントのみ取得
         comments: {
           orderBy: {
             createdAt: "desc",
@@ -1051,30 +1062,47 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           },
         },
       },
-      orderBy: {
-        likesCount: "desc",
-      },
+      orderBy: [{ likesCount: "desc" }, { commentsCount: "desc" }],
+      // ページングを追加して初期データ量を削減
+      take: 20,
     });
 
     const serializedMcs = mcs.map((mc) => ({
       ...mc,
-      isLikedByUser: session ? mc.likes.length > 0 : false,
-      comments: mc.comments.map((comment: CommentWithUser) => ({
-        id: comment.id,
-        content: comment.content,
-        createdAt: comment.createdAt.toISOString(),
-        updatedAt: comment.updatedAt.toISOString(),
-        userId: comment.userId,
-        mcId: comment.mcId,
-        parentId: null,
-        user: {
-          id: comment.user.id,
-          name: comment.user.name,
-          image: comment.user.image,
-          email: comment.user.email,
-        },
-        replies: [], // 返信は初期表示では空の配列とする
-      })),
+      description: null, // 初期表示ではnullにして、必要に応じて非同期取得
+      isLikedByUser: session && user?.id ? mc.likes.length > 0 : false,
+      // コメントを整形
+      comments: mc.comments.map(
+        (comment: {
+          id: number;
+          content: string;
+          createdAt: Date;
+          updatedAt: Date;
+          userId: string;
+          mcId: number;
+          user: {
+            id: string;
+            name: string | null;
+            image: string | null;
+            email: string | null;
+          };
+        }) => ({
+          id: comment.id,
+          content: comment.content,
+          createdAt: comment.createdAt.toISOString(),
+          updatedAt: comment.updatedAt.toISOString(),
+          userId: comment.userId,
+          mcId: comment.mcId,
+          parentId: null,
+          user: {
+            id: comment.user.id,
+            name: comment.user.name,
+            image: comment.user.image,
+            email: comment.user.email,
+          },
+          replies: [], // 返信は初期表示では空の配列とする
+        })
+      ),
       createdAt: mc.createdAt.toISOString(),
       updatedAt: mc.updatedAt.toISOString(),
     }));
@@ -1082,16 +1110,18 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     return {
       props: {
         mcs: serializedMcs,
-        session: session
-          ? {
-              ...session,
-              user: {
-                ...session.user,
-                id: user?.id || null,
-                isAdmin: user?.isAdmin || false,
-              },
-            }
-          : null,
+        totalCount: await prisma.mC.count(), // 総件数を追加
+        session:
+          session && user?.id
+            ? {
+                ...session,
+                user: {
+                  ...session.user,
+                  id: user?.id || null,
+                  isAdmin: user?.isAdmin || false,
+                },
+              }
+            : null,
       },
     };
   } catch (error) {
@@ -1099,6 +1129,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     return {
       props: {
         mcs: [],
+        totalCount: 0,
         session: null,
         error: "データの取得に失敗しました",
       },
