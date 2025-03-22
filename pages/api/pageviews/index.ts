@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { getSession } from "next-auth/react";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]";
 import { prisma } from "../../../lib/prisma";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 // ページビュー更新の制限（秒単位）
 const UPDATE_LIMIT_SECONDS = 10;
@@ -31,16 +33,33 @@ export default async function handler(
       // 更新時間を記録
       lastUpdates[path] = now;
 
-      // 非同期で更新処理を実行し、レスポンスはすぐに返す
-      updatePageView(path).catch((error) => {
-        console.error("Error updating page views in background:", error);
-      });
+      // 非同期でデータベース接続確認
+      try {
+        // データベース接続をタイムアウト付きで確認
+        const timeout = new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Database connection timeout")),
+            2000
+          )
+        );
+
+        await Promise.race([prisma.$queryRaw`SELECT 1`, timeout]);
+
+        // 接続が確認できた場合のみ更新処理を実行
+        updatePageView(path).catch((error) => {
+          console.error("Error updating page views in background:", error);
+        });
+      } catch (error) {
+        // データベース接続エラーの場合は警告としてログ出力
+        console.warn("Database connection check failed:", error);
+        // フロントエンドにはエラーを返さず、通常のレスポンスを返す
+      }
 
       return res
         .status(202)
         .json({ message: "ページビュー更新処理を開始しました" });
     } catch (error) {
-      console.error("Error updating page views:", error);
+      console.error("Error handling page view request:", error);
       return res
         .status(500)
         .json({ error: "ページビューの更新に失敗しました" });
@@ -49,7 +68,7 @@ export default async function handler(
 
   if (req.method === "GET") {
     try {
-      const session = await getSession({ req });
+      const session = await getServerSession(req, res, authOptions);
 
       if (!session?.user?.email) {
         return res.status(401).json({ error: "認証が必要です" });
@@ -105,6 +124,23 @@ async function updatePageView(path: string): Promise<void> {
       },
     });
   } catch (error) {
-    console.error("Failed to update page view in background:", error);
+    // データベース接続エラーの詳細を特定してログに記録
+    if (error instanceof PrismaClientKnownRequestError) {
+      if (error.code === "P1001") {
+        console.warn(
+          "Database connection error during page view update:",
+          error.message
+        );
+      } else {
+        console.error(
+          "Prisma error during page view update:",
+          error.code,
+          error.message
+        );
+      }
+    } else {
+      console.error("Failed to update page view in background:", error);
+    }
+    // エラーを上位に伝播させない - ページビューの更新は非クリティカルな機能
   }
 }
