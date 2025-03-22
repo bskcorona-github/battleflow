@@ -414,10 +414,10 @@ const MCViewer = ({
                         {/* 返信コンポーネントを追加 */}
                         <div className="mt-4">
                           <CommentReply
-                            comment={comment}
+                            commentId={comment.id}
+                            replies={comment.replies || []}
                             onReply={handleReply}
-                            handleEditComment={handleEditComment}
-                            handleDeleteComment={handleDeleteComment}
+                            session={sessionData}
                           />
                         </div>
                       </div>
@@ -824,6 +824,11 @@ export default function MCList({ mcs: initialMcs }: Props) {
       return null;
     }
 
+    if (!session.user?.id) {
+      toast.error("セッション情報が不足しています。再ログインしてください");
+      return null;
+    }
+
     try {
       const response = await fetch("/api/mcs/comment", {
         method: "POST",
@@ -849,14 +854,14 @@ export default function MCList({ mcs: initialMcs }: Props) {
                   {
                     ...newComment,
                     user: {
-                      id: session.user.id,
-                      name: session.user.name,
-                      email: session.user.email,
-                      image: session.user.image,
+                      id: session.user?.id,
+                      name: session.user?.name,
+                      email: session.user?.email,
+                      image: session.user?.image,
                     },
                     replies: [],
                     parentId: null,
-                    userId: session.user.id,
+                    userId: session.user?.id,
                     mcId: mcId,
                   },
                   ...mc.comments,
@@ -870,14 +875,14 @@ export default function MCList({ mcs: initialMcs }: Props) {
       return {
         ...newComment,
         user: {
-          id: session.user.id,
-          name: session.user.name,
-          email: session.user.email,
-          image: session.user.image,
+          id: session.user?.id,
+          name: session.user?.name,
+          email: session.user?.email,
+          image: session.user?.image,
         },
         replies: [],
         parentId: null,
-        userId: session.user.id,
+        userId: session.user?.id,
         mcId: mcId,
       };
     } catch (error) {
@@ -1157,7 +1162,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         description: null, // 必要に応じて後から取得
         likesCount: mc.likesCount,
         commentsCount: mc.commentsCount,
-        isLikedByUser: session && user?.id ? mc.likes.length > 0 : false,
+        isLikedByUser:
+          session && user?.id ? mc.likes && mc.likes.length > 0 : false,
         createdAt: mc.createdAt.toISOString(),
         updatedAt: mc.updatedAt.toISOString(),
         // コメントを最小限の情報に絞る

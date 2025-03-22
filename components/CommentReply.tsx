@@ -1,17 +1,13 @@
 import { useState } from "react";
 import Image from "next/image";
-import { useSession } from "next-auth/react";
+import { Session } from "next-auth";
 import { CommentWithUser } from "@/types/mc";
 
 type CommentReplyProps = {
-  comment: CommentWithUser;
-  onReply: (
-    commentId: number,
-    content: string,
-    replyToUser?: string
-  ) => Promise<void>;
-  handleEditComment: (commentId: number, content: string) => Promise<void>;
-  handleDeleteComment: (commentId: number) => Promise<void>;
+  commentId: number;
+  replies: CommentWithUser[];
+  onReply: (commentId: number, content: string) => Promise<void>;
+  session: Session | null;
 };
 
 // ReplyFormのprops型を定義
@@ -20,17 +16,13 @@ type ReplyFormProps = {
 };
 
 export default function CommentReply({
-  comment,
+  commentId,
+  replies,
   onReply,
-  handleEditComment,
-  handleDeleteComment,
+  session,
 }: CommentReplyProps) {
-  const { data: sessionData } = useSession();
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState("");
-  const [replyingToId, setReplyingToId] = useState<number | null>(null);
-  const [editingReplyId, setEditingReplyId] = useState<number | null>(null);
-  const [editContent, setEditContent] = useState("");
   const [showReplies, setShowReplies] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent, replyToUserName?: string) => {
@@ -42,32 +34,31 @@ export default function CommentReply({
         ? `@${replyToUserName} ${replyContent}`
         : replyContent;
 
-      await onReply(comment.id, content, replyToUserName);
+      await onReply(commentId, content);
       setReplyContent("");
       setIsReplying(false);
-      setReplyingToId(null);
     } catch (error) {
       console.error("Error posting reply:", error);
     }
   };
 
-  // ReplyFormコンポーネントの型を修正
+  // ReplyFormコンポーネント
   const ReplyForm: React.FC<ReplyFormProps> = ({ replyToUserName }) => (
     <form
       onSubmit={(e) => handleSubmit(e, replyToUserName)}
       className="space-y-2 mt-2"
     >
       {replyToUserName && (
-        <div className="text-sm font-medium text-gray-900">
+        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
           返信先:{" "}
-          <span className="text-black font-semibold">@{replyToUserName}</span>
+          <span className="text-primary font-semibold">@{replyToUserName}</span>
         </div>
       )}
       <textarea
         value={replyContent}
         onChange={(e) => setReplyContent(e.target.value)}
         placeholder="返信を入力..."
-        className="w-full p-2 border rounded-md text-black"
+        className="textarea w-full"
         rows={2}
         autoFocus
       />
@@ -77,16 +68,15 @@ export default function CommentReply({
           onClick={() => {
             setIsReplying(false);
             setReplyContent("");
-            setReplyingToId(null);
           }}
-          className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+          className="btn btn-ghost text-sm"
         >
           キャンセル
         </button>
         <button
           type="submit"
           disabled={!replyContent.trim()}
-          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          className="btn btn-primary text-sm"
         >
           返信
         </button>
@@ -97,28 +87,25 @@ export default function CommentReply({
   return (
     <div className="space-y-4">
       {/* メインの返信ボタン */}
-      {!isReplying && sessionData && (
+      {!isReplying && session && (
         <button
-          onClick={() => {
-            setIsReplying(true);
-            setReplyingToId(null);
-          }}
-          className="text-sm text-blue-600 hover:text-blue-800"
+          onClick={() => setIsReplying(true)}
+          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-2"
         >
           返信する
         </button>
       )}
 
       {/* メインの返信フォーム */}
-      {isReplying && !replyingToId && <ReplyForm />}
+      {isReplying && <ReplyForm />}
 
       {/* 返信一覧 */}
-      {comment.replies && comment.replies.length > 0 && (
+      {replies && replies.length > 0 && (
         <div>
           {/* 返信の表示/非表示を切り替えるボタン */}
           <button
             onClick={() => setShowReplies(!showReplies)}
-            className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 mb-2"
+            className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 mt-2"
           >
             <svg
               className={`w-4 h-4 transform transition-transform ${
@@ -135,128 +122,47 @@ export default function CommentReply({
                 d="M9 5l7 7-7 7"
               />
             </svg>
-            {showReplies
-              ? "返信を隠す"
-              : `${comment.replies.length}件の返信を表示`}
+            {showReplies ? "返信を隠す" : `${replies.length}件の返信を表示`}
           </button>
 
           {/* 返信一覧（折りたたみ可能） */}
           {showReplies && (
-            <div className="ml-8 space-y-4 border-l-2 border-gray-200 pl-4">
-              {comment.replies.map((reply) => (
+            <div className="ml-4 space-y-4 border-l-2 border-gray-200 dark:border-gray-700 pl-4 mt-3">
+              {replies.map((reply) => (
                 <div key={reply.id}>
-                  <div className="bg-gray-50 p-3 rounded">
+                  <div className="bg-gray-50 dark:bg-slate-700/50 p-3 rounded">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        {reply.user.image && (
+                        {reply.user.image ? (
                           <Image
                             src={reply.user.image}
                             alt={reply.user.name || "User"}
                             width={24}
                             height={24}
                             className="rounded-full"
-                            onError={(e) => {
-                              const img = e.target as HTMLImageElement;
-                              img.src = "/images/default-avatar.png";
-                            }}
-                            unoptimized
                           />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-gray-300 dark:bg-slate-600 flex items-center justify-center">
+                            <span className="text-gray-600 dark:text-gray-300 text-xs font-bold">
+                              {reply.user.name?.substring(0, 2).toUpperCase() ||
+                                "UN"}
+                            </span>
+                          </div>
                         )}
                         <div>
-                          <div className="font-semibold text-sm text-black">
-                            {reply.user.name || "Anonymous"}
+                          <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                            {reply.user.name || "匿名ユーザー"}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
                             {new Date(reply.createdAt).toLocaleString()}
                           </div>
                         </div>
                       </div>
-                      {/* 編集・削除ボタン */}
-                      {sessionData?.user?.id === reply.userId && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingReplyId(reply.id);
-                              setEditContent(reply.content);
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-800"
-                          >
-                            編集
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm("この返信を削除しますか？")) {
-                                handleDeleteComment(reply.id);
-                              }
-                            }}
-                            className="text-xs text-red-600 hover:text-red-800"
-                          >
-                            削除
-                          </button>
-                        </div>
-                      )}
                     </div>
-                    {editingReplyId === reply.id ? (
-                      <div className="space-y-2">
-                        <textarea
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          className="w-full p-2 border rounded-md text-black"
-                          rows={2}
-                        />
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            onClick={() => {
-                              setEditingReplyId(null);
-                              setEditContent("");
-                            }}
-                            className="px-3 py-1 text-xs text-gray-600 hover:text-gray-800"
-                          >
-                            キャンセル
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (
-                                editContent.trim() &&
-                                editContent !== reply.content
-                              ) {
-                                await handleEditComment(reply.id, editContent);
-                              }
-                              setEditingReplyId(null);
-                              setEditContent("");
-                            }}
-                            className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                          >
-                            保存
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                        {reply.content}
-                      </p>
-                    )}
-                    {/* 返信への返信ボタン */}
-                    {sessionData && !editingReplyId && (
-                      <button
-                        onClick={() => {
-                          setIsReplying(true);
-                          setReplyingToId(reply.id);
-                        }}
-                        className="text-xs text-blue-600 hover:text-blue-800 mt-2"
-                      >
-                        返信する
-                      </button>
-                    )}
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {reply.content}
+                    </p>
                   </div>
-                  {/* 返信への返信フォーム */}
-                  {isReplying && replyingToId === reply.id && (
-                    <div className="mt-2">
-                      <ReplyForm
-                        replyToUserName={reply.user.name || "Anonymous"}
-                      />
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

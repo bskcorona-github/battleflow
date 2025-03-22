@@ -1,11 +1,23 @@
-import type { AppProps } from "next/app";
 import { SessionProvider } from "next-auth/react";
-import { Toaster } from "react-hot-toast";
+import type { AppProps } from "next/app";
 import Head from "next/head";
-import Navigation from "../components/Navigation";
-import "../styles/globals.css";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
+import { Toaster } from "react-hot-toast";
+
+import "@/styles/globals.css";
+import Layout from "@/components/Layout";
+
+// Google Fontsのインポート
+import { Noto_Sans_JP } from "next/font/google";
+
+// Noto Sans JPの設定
+const notoSansJP = Noto_Sans_JP({
+  weight: ["400", "500", "700"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-noto-sans-jp",
+});
 
 export default function App({
   Component,
@@ -149,36 +161,39 @@ export default function App({
           content="https://battleflow.vercel.app/twitter-card.jpg"
         />
         <link rel="canonical" href="https://battleflow.vercel.app" />
-        <link rel="icon" href="/icons/アイコン1.png" type="image/png" />
-        <link
-          rel="apple-touch-icon"
-          href="/icons/アイコン1.png"
-          type="image/png"
-        />
+        <link rel="icon" href="/icons/アイコン1.png" />
+        <link rel="apple-touch-icon" href="/icons/アイコン1.png" />
         <link rel="mask-icon" href="/icons/アイコン1.png" color="#ff0000" />
       </Head>
-      <Navigation />
-      <Component {...pageProps} />
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 3000,
-          style: {
-            background: "#333",
-            color: "#fff",
-          },
-          success: {
+      <div className={`${notoSansJP.variable} font-sans`}>
+        <Layout>
+          <Component {...pageProps} />
+        </Layout>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 3000,
             style: {
-              background: "#22c55e",
+              background: "var(--card-bg)",
+              color: "var(--foreground)",
+              boxShadow: "var(--card-shadow)",
+              border: "1px solid var(--card-border)",
             },
-          },
-          error: {
-            style: {
-              background: "#ef4444",
+            success: {
+              style: {
+                background: "var(--success)",
+                color: "white",
+              },
             },
-          },
-        }}
-      />
+            error: {
+              style: {
+                background: "var(--danger)",
+                color: "white",
+              },
+            },
+          }}
+        />
+      </div>
     </SessionProvider>
   );
 }

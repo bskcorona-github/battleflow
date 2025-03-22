@@ -125,7 +125,7 @@ export default function MCComment({
       {/* コメントヘッダー */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
+        className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
       >
         <svg
           className={`w-4 h-4 transition-transform ${
@@ -155,13 +155,13 @@ export default function MCComment({
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="コメントを入力..."
-                className="w-full p-2 border rounded-md text-gray-900 placeholder-gray-500"
+                className="textarea w-full"
                 rows={3}
               />
               <button
                 type="submit"
                 disabled={isSubmitting || !comment.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="btn btn-primary"
               >
                 {isSubmitting ? "投稿中..." : "コメントを投稿"}
               </button>
@@ -171,10 +171,13 @@ export default function MCComment({
           {/* コメント一覧 */}
           <div className="space-y-4">
             {comments.map((comment) => (
-              <div key={comment.id} className="bg-gray-50 p-4 rounded-lg">
+              <div
+                key={comment.id}
+                className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    {comment.user.image && (
+                    {comment.user.image ? (
                       <Image
                         src={comment.user.image}
                         alt={comment.user.name || "User"}
@@ -182,12 +185,19 @@ export default function MCComment({
                         height={32}
                         className="rounded-full"
                       />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-slate-600 flex items-center justify-center">
+                        <span className="text-gray-600 dark:text-gray-300 text-xs font-bold">
+                          {comment.user.name?.substring(0, 2).toUpperCase() ||
+                            "UN"}
+                        </span>
+                      </div>
                     )}
                     <div>
-                      <div className="font-medium text-gray-900">
-                        {comment.user.name || "Anonymous"}
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {comment.user.name || "匿名ユーザー"}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
                         {new Date(comment.createdAt).toLocaleString()}
                       </div>
                     </div>
@@ -196,13 +206,13 @@ export default function MCComment({
                     <div className="flex gap-2">
                       <button
                         onClick={() => startEdit(comment)}
-                        className="text-blue-600 hover:text-blue-800"
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm"
                       >
                         編集
                       </button>
                       <button
                         onClick={() => handleDelete(comment.id)}
-                        className="text-red-600 hover:text-red-800"
+                        className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm"
                       >
                         削除
                       </button>
@@ -214,26 +224,26 @@ export default function MCComment({
                     <textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
-                      className="w-full p-2 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                      className="textarea w-full"
                       rows={3}
                     />
                     <div className="flex gap-2 mt-2">
                       <button
                         onClick={() => handleEdit(comment.id, editContent)}
-                        className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        className="btn btn-primary text-sm"
                       >
                         更新
                       </button>
                       <button
                         onClick={cancelEdit}
-                        className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                        className="btn btn-ghost text-sm"
                       >
                         キャンセル
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-700 whitespace-pre-wrap">
+                  <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                     {comment.content}
                   </p>
                 )}

@@ -8,20 +8,20 @@ datasource db {
 }
 
 model MC {
-  id            Int       @id @default(autoincrement())
-  name          String    @unique
+  id            Int         @id @default(autoincrement())
+  name          String      @unique(map: "MC_name_key")
   affiliation   String?
-  description   String?
+  description   String?     @db.Text
   hood          String?
   image         String?
-  likesCount    Int       @default(0)
-  commentsCount Int       @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  likes         Like[]
+  likesCount    Int         @default(0)
+  commentsCount Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @default(now()) @updatedAt
   comments      MCComment[]
+  likes         Like[]
   ranking       MCRank?
-  
+
   @@map("mc")
 }
 
@@ -38,58 +38,59 @@ model Account {
   scope             String?
   id_token          String? @db.Text
   session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Account_userId_fkey")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
+  @@unique([provider, providerAccountId], map: "Account_provider_providerAccountId_key")
+  @@index([userId], map: "Account_userId_fkey")
   @@map("account")
 }
 
 model Session {
   id           String   @id @default(cuid())
-  sessionToken String   @unique
+  sessionToken String   @unique(map: "Session_sessionToken_key")
   userId       String
   expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Session_userId_fkey")
+
+  @@index([userId], map: "Session_userId_fkey")
   @@map("session")
 }
 
 model User {
-  id            String    @id @default(cuid())
+  id            String        @id @default(cuid())
   name          String?
-  email         String?   @unique
+  email         String?       @unique(map: "User_email_key")
   emailVerified DateTime?
   image         String?
-  isAdmin       Boolean   @default(false)
+  isAdmin       Boolean       @default(false)
   accounts      Account[]
-  sessions      Session[]
-  likes         Like[]
   mcComments    MCComment[]
   rankComments  RankComment[]
+  likes         Like[]
+  sessions      Session[]
   votes         Vote[]
-  
+
   @@map("user")
 }
 
 model VerificationToken {
   identifier String
-  token      String   @unique
+  token      String   @unique(map: "VerificationToken_token_key")
   expires    DateTime
 
-  @@unique([identifier, token])
+  @@unique([identifier, token], map: "VerificationToken_identifier_token_key")
   @@map("verificationtoken")
 }
 
 model Video {
-  id          String   @id
-  title       String
-  thumbnail   String
-  publishedAt DateTime
-  channelId   String
+  id           String   @id
+  title        String
+  thumbnail    String
+  publishedAt  DateTime
+  channelId    String
   channelTitle String
-  viewCount   Int
-  
+  viewCount    Int
+
   @@map("video")
 }
 
@@ -193,101 +194,109 @@ model video_kuchigenka {
 }
 
 model video_battlesummit {
-  id           String   @id
-  title        String
-  thumbnail    String
-  publishedAt  DateTime
-  channelId    String
-  channelTitle String
-  viewCount    Int
-  duration     String
+  id            String   @id
+  title         String
+  thumbnail     String
+  publishedAt   DateTime
+  channelId     String
+  channelTitle  String
+  viewCount     Int
+  duration      String
   sourceChannel String
 }
 
 model Like {
   id        Int      @id @default(autoincrement())
-  user      User     @relation(fields: [userId], references: [id])
   userId    String
-  mc        MC       @relation(fields: [mcId], references: [id])
   mcId      Int
   createdAt DateTime @default(now())
+  mc        MC       @relation(fields: [mcId], references: [id], map: "Like_mcId_fkey")
+  user      User     @relation(fields: [userId], references: [id], map: "Like_userId_fkey")
 
-  @@unique([userId, mcId])
+  @@unique([userId, mcId], map: "Like_userId_mcId_key")
+  @@index([mcId], map: "Like_mcId_fkey")
   @@map("like")
 }
 
 model MCComment {
-  id        Int      @id @default(autoincrement())
-  content   String   @db.Text
+  id        Int         @id @default(autoincrement())
+  content   String      @db.Text
   userId    String
   mcId      Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-  mc        MC       @relation(fields: [mcId], references: [id])
-  parentId  Int?     // 親コメントのID
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  parentId  Int?
+  mc        MC          @relation(fields: [mcId], references: [id])
   parent    MCComment?  @relation("MCCommentReplies", fields: [parentId], references: [id])
   replies   MCComment[] @relation("MCCommentReplies")
+  user      User        @relation(fields: [userId], references: [id])
 
+  @@index([mcId], map: "comments_mc_mcId_fkey")
+  @@index([parentId], map: "comments_mc_parentId_fkey")
+  @@index([userId], map: "comments_mc_userId_fkey")
   @@map("comments_mc")
 }
 
 model RankComment {
-  id        Int      @id @default(autoincrement())
-  content   String   @db.Text
+  id        Int           @id @default(autoincrement())
+  content   String        @db.Text
   userId    String
   mcRankId  Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-  mcRank    MCRank   @relation(fields: [mcRankId], references: [id])
-  parentId  Int?     // 親コメントのID
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  parentId  Int?
+  mcRank    MCRank        @relation(fields: [mcRankId], references: [id])
   parent    RankComment?  @relation("RankCommentReplies", fields: [parentId], references: [id])
   replies   RankComment[] @relation("RankCommentReplies")
+  user      User          @relation(fields: [userId], references: [id])
 
+  @@index([mcRankId], map: "comments_rank_mcRankId_fkey")
+  @@index([parentId], map: "comments_rank_parentId_fkey")
+  @@index([userId], map: "comments_rank_userId_fkey")
   @@map("comments_rank")
 }
 
 model MCRank {
-  id                 Int       @id @default(autoincrement())
-  name               String    @unique
-  mc                 MC        @relation(fields: [mcId], references: [id])
-  mcId               Int       @unique
-  totalScore         Float     @default(0) @map("total_score")
-  rhymeScore         Float     @default(0) @map("rhyme_score")
-  vibesScore         Float     @default(0) @map("vibes_score")
-  flowScore          Float     @default(0) @map("flow_score")
-  dialogueScore      Float     @default(0) @map("dialogue_score")
-  musicalityScore    Float     @default(0) @map("musicality_score")
-  rawTotalScore      Float     @default(0) @map("raw_total_score")
-  rawRhymeScore      Float     @default(0) @map("raw_rhyme_score")
-  rawVibesScore      Float     @default(0) @map("raw_vibes_score")
-  rawFlowScore       Float     @default(0) @map("raw_flow_score")
-  rawDialogueScore   Float     @default(0) @map("raw_dialogue_score")
-  rawMusicalityScore Float     @default(0) @map("raw_musicality_score")
-  voteCount          Int       @default(0) @map("vote_count")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  votes              Vote[]
+  id                 Int           @id @default(autoincrement())
+  name               String        @unique
+  mcId               Int           @unique
+  totalScore         Float         @default(0) @map("total_score")
+  rhymeScore         Float         @default(0) @map("rhyme_score")
+  vibesScore         Float         @default(0) @map("vibes_score")
+  flowScore          Float         @default(0) @map("flow_score")
+  dialogueScore      Float         @default(0) @map("dialogue_score")
+  musicalityScore    Float         @default(0) @map("musicality_score")
+  rawTotalScore      Float         @default(0) @map("raw_total_score")
+  rawRhymeScore      Float         @default(0) @map("raw_rhyme_score")
+  rawVibesScore      Float         @default(0) @map("raw_vibes_score")
+  rawFlowScore       Float         @default(0) @map("raw_flow_score")
+  rawDialogueScore   Float         @default(0) @map("raw_dialogue_score")
+  rawMusicalityScore Float         @default(0) @map("raw_musicality_score")
+  voteCount          Int           @default(0) @map("vote_count")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @default(now()) @updatedAt @map("updated_at")
   comments           RankComment[]
+  mc                 MC            @relation(fields: [mcId], references: [id])
+  votes              Vote[]
 
   @@map("mc_rank")
 }
 
 model Vote {
-  id          Int      @id @default(autoincrement())
-  mcId        Int      @map("mc_id")
-  userId      String   @map("user_id")
-  rhyme       Int
-  vibes       Int
-  flow        Int
-  dialogue    Int
-  musicality  Int
-  createdAt   DateTime @default(now()) @map("created_at")
-  mc          MCRank   @relation(fields: [mcId], references: [id])
-  user        User     @relation(fields: [userId], references: [id])
+  id         Int      @id @default(autoincrement())
+  mcId       Int      @map("mc_id")
+  userId     String   @map("user_id")
+  rhyme      Int
+  vibes      Int
+  flow       Int
+  dialogue   Int
+  musicality Int
+  createdAt  DateTime @default(now()) @map("created_at")
+  mc         MCRank   @relation(fields: [mcId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
 
   @@unique([mcId, userId])
+  @@index([userId], map: "votes_user_id_fkey")
   @@map("votes")
 }
 

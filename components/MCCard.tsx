@@ -213,8 +213,8 @@ export default function MCCard({
   ]);
 
   return (
-    <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-200 w-[400px] flex flex-col">
-      <div className="relative h-[280px] bg-gray-200 flex-shrink-0">
+    <div className="card flex flex-col w-full max-w-[400px] h-full">
+      <div className="relative h-[280px] bg-gray-100 dark:bg-slate-700 flex-shrink-0">
         {mc.image && mc.image !== "NULL" && mc.image !== "[NULL]" ? (
           <Image
             src={`/images/mcs/${encodeURIComponent(mc.image)}`}
@@ -228,69 +228,93 @@ export default function MCCard({
               // Create placeholder with initials
               const container = document.createElement("div");
               container.className =
-                "flex items-center justify-center h-full bg-gray-100";
-              container.innerHTML = `<span class="text-gray-500 font-bold text-4xl">${mc.name
+                "flex items-center justify-center h-full bg-gray-100 dark:bg-slate-700";
+              container.innerHTML = `<span class="text-gray-500 dark:text-gray-400 font-bold text-4xl">${mc.name
                 .substring(0, 2)
                 .toUpperCase()}</span>`;
               img.parentNode?.replaceChild(container, img);
             }}
           />
         ) : (
-          <div className="flex items-center justify-center h-full bg-gray-100">
-            <span className="text-gray-500 font-bold text-4xl">
+          <div className="flex items-center justify-center h-full bg-gray-100 dark:bg-slate-700">
+            <span className="text-gray-500 dark:text-gray-400 font-bold text-4xl">
               {mc.name.substring(0, 2).toUpperCase()}
             </span>
           </div>
         )}
       </div>
-      <div className="p-6 bg-white">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-gray-800">{mc.name}</h2>
-          {session && (
+
+      <div className="p-6 flex-grow flex flex-col">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+          {mc.name}
+        </h2>
+
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
             <button
               onClick={handleLikeClick}
-              className={`flex items-center gap-1 ${
-                mc.isLikedByUser ? "text-red-500" : "text-gray-500"
-              } hover:text-red-500 transition-colors`}
-              disabled={!session}
+              className={`flex items-center space-x-1 ${
+                mc.likes &&
+                mc.likes.some(
+                  (like) => session?.user?.id && like.userId === session.user.id
+                )
+                  ? "text-red-500"
+                  : "text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+              } transition-colors duration-200`}
             >
               <svg
-                className={`w-5 h-5 ${mc.isLikedByUser ? "fill-current" : ""}`}
+                xmlns="http://www.w3.org/2000/svg"
+                fill={
+                  mc.likes &&
+                  mc.likes.some(
+                    (like) =>
+                      session?.user?.id && like.userId === session.user.id
+                  )
+                    ? "currentColor"
+                    : "none"
+                }
                 viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-6 h-6"
               >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                  d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
                 />
               </svg>
-              <span>{mc.likesCount}</span>
+              <span className="text-sm font-medium">
+                {mc.likesCount || (mc.likes ? mc.likes.length : 0)}
+              </span>
             </button>
+          </div>
+
+          {mc.hood && (
+            <span className="inline-block px-3 py-1 text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-full">
+              {mc.hood}
+            </span>
           )}
         </div>
-        <div className="space-y-4">
+
+        <div className="space-y-4 flex-grow">
           {mc.description && (
             <div
-              className="text-gray-700"
+              className="text-gray-700 dark:text-gray-300 text-sm"
               dangerouslySetInnerHTML={createSanitizedHTML(mc.description)}
             />
           )}
-          {mc.hood && (
-            <div className="py-2">
-              <span className="font-semibold text-gray-700">地域:</span>{" "}
-              <span className="text-gray-800">{mc.hood}</span>
-            </div>
-          )}
 
           {/* インタラクション部分 */}
-          <div className="flex items-center space-x-4 pt-4 border-t">
+          <div className="flex items-center space-x-4 pt-4 mt-auto">
             <button
               onClick={() => toggleComments(mc.id)}
-              className="flex items-center space-x-1 text-gray-500 hover:text-blue-500"
+              className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors duration-200"
             >
               <ChatBubbleLeftIcon className="w-6 h-6" />
-              <span>{getTotalCommentsCount(mc.comments)}</span>
+              <span className="text-sm font-medium">
+                {getTotalCommentsCount(mc.comments)}
+              </span>
             </button>
           </div>
 
@@ -306,12 +330,12 @@ export default function MCCard({
                       value={commentContent}
                       onChange={(e) => setCommentContent(e.target.value)}
                       placeholder="コメントを追加..."
-                      className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                      className="input flex-1"
                     />
                     <button
                       type="submit"
                       disabled={!commentContent.trim()}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+                      className="btn btn-primary disabled:opacity-50"
                     >
                       投稿
                     </button>
@@ -323,134 +347,127 @@ export default function MCCard({
               {isLoadingComments && (
                 <div className="flex justify-center items-center py-4">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                  <span className="ml-2 text-gray-600">
+                  <span className="ml-2 text-gray-600 dark:text-gray-400">
                     コメントを読み込み中...
                   </span>
                 </div>
               )}
 
               {/* コメント一覧 */}
-              <div className="space-y-4">
-                {mc.comments
-                  .filter(
-                    (comment: CommentWithUser) => comment.parentId === null
-                  )
-                  .map((comment: CommentWithUser) => (
-                    <div key={comment.id} className="bg-gray-50 p-4 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {comment.user.image && (
-                            <Image
-                              src={comment.user.image}
-                              alt={comment.user.name || "User"}
-                              width={32}
-                              height={32}
-                              className="rounded-full"
-                              onError={(e) => {
-                                const img = e.target as HTMLImageElement;
-                                img.src = "/images/default-avatar.png";
-                              }}
-                              unoptimized
-                            />
-                          )}
-                          <div>
-                            <div className="font-medium text-gray-900">
-                              {comment.user.name || "Anonymous"}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {new Date(comment.createdAt).toLocaleString()}
-                            </div>
-                          </div>
-                        </div>
-                        {isCurrentUserComment(comment) && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingCommentId(comment.id);
-                                setEditCommentContent(comment.content);
-                              }}
-                              className="text-sm text-blue-600 hover:text-blue-800"
-                            >
-                              編集
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm("このコメントを削除しますか？")) {
-                                  handleDeleteComment(comment.id);
-                                }
-                              }}
-                              className="text-sm text-red-600 hover:text-red-800"
-                            >
-                              削除
-                            </button>
+              {mc.comments
+                .sort(
+                  (a, b) =>
+                    new Date(b.createdAt).getTime() -
+                    new Date(a.createdAt).getTime()
+                )
+                .map((comment: CommentWithUser) => (
+                  <div
+                    key={comment.id}
+                    className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-2">
+                        {comment.user.image ? (
+                          <Image
+                            src={comment.user.image}
+                            alt={comment.user.name || "User"}
+                            width={32}
+                            height={32}
+                            className="rounded-full"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-slate-600 flex items-center justify-center">
+                            <span className="text-gray-600 dark:text-gray-300 text-xs font-bold">
+                              {comment.user.name
+                                ?.substring(0, 2)
+                                .toUpperCase() || "UN"}
+                            </span>
                           </div>
                         )}
-                      </div>
-                      {editingCommentId === comment.id ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={editCommentContent}
-                            onChange={(e) =>
-                              setEditCommentContent(e.target.value)
-                            }
-                            className="w-full p-2 border rounded-md text-gray-900"
-                            rows={3}
-                          />
-                          <div className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => {
-                                setEditingCommentId(null);
-                                setEditCommentContent("");
-                              }}
-                              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
-                            >
-                              キャンセル
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (
-                                  editCommentContent.trim() &&
-                                  editCommentContent !== comment.content
-                                ) {
-                                  await handleEditComment(
-                                    comment.id,
-                                    editCommentContent
-                                  );
-                                  // 状態を更新
-                                  mc.comments = mc.comments.map(
-                                    (c: CommentWithUser) =>
-                                      c.id === comment.id
-                                        ? { ...c, content: editCommentContent }
-                                        : c
-                                  );
-                                }
-                                setEditingCommentId(null);
-                                setEditCommentContent("");
-                              }}
-                              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                            >
-                              保存
-                            </button>
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">
+                            {comment.user.name || "匿名ユーザー"}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {new Date(comment.createdAt).toLocaleString()}
                           </div>
                         </div>
-                      ) : (
-                        <p className="text-gray-700 whitespace-pre-wrap">
-                          {comment.content}
-                        </p>
-                      )}
-
-                      {/* 返信コンポーネントを追加 */}
-                      <div className="mt-4">
-                        <CommentReply
-                          comment={comment}
-                          onReply={handleReply}
-                          handleEditComment={handleEditComment}
-                          handleDeleteComment={handleDeleteComment}
-                        />
                       </div>
+
+                      {isCurrentUserComment(comment) && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingCommentId(comment.id);
+                              setEditCommentContent(comment.content);
+                            }}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          >
+                            編集
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm("このコメントを削除しますか？")) {
+                                handleDeleteComment(comment.id);
+                              }
+                            }}
+                            className="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                          >
+                            削除
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  ))}
-              </div>
+                    {editingCommentId === comment.id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editCommentContent}
+                          onChange={(e) =>
+                            setEditCommentContent(e.target.value)
+                          }
+                          className="textarea w-full"
+                          rows={3}
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => {
+                              setEditingCommentId(null);
+                              setEditCommentContent("");
+                            }}
+                            className="btn btn-ghost text-sm"
+                          >
+                            キャンセル
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (editCommentContent.trim()) {
+                                handleEditComment(
+                                  comment.id,
+                                  editCommentContent
+                                );
+                              }
+                            }}
+                            className="btn btn-primary text-sm"
+                          >
+                            更新
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                        {comment.content}
+                      </p>
+                    )}
+
+                    {/* 返信機能 */}
+                    <CommentReply
+                      commentId={comment.id}
+                      replies={comment.replies || []}
+                      onReply={handleReply}
+                      session={session}
+                    />
+                  </div>
+                ))}
             </div>
           )}
         </div>
