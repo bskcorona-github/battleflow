@@ -1,5 +1,7 @@
 import Head from "next/head";
 import Link from "next/link";
+import UpdateHistory from "../components/UpdateHistory";
+import { updateHistory } from "../utils/updateHistory";
 
 export default function Home() {
   return (
@@ -113,6 +115,11 @@ export default function Home() {
       </section>
 
       <div className="container mx-auto px-4 pb-20">
+        {/* 更新履歴セクション */}
+        <section className="mb-16 max-w-3xl mx-auto">
+          <UpdateHistory items={updateHistory} />
+        </section>
+
         {/* 特徴セクション */}
         <section className="mb-20">
           <h2 className="section-title text-center mx-auto">

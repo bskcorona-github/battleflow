@@ -218,7 +218,7 @@ export default function Battles() {
         `キーワード: ${selectedKeyword.name}, タイムスタンプ: ${currentTimestamp}`
       );
       const response = await fetch(
-        `/api/videos?keyword=${selectedKeyword.name}&query=${selectedKeyword.query}&channelId=${selectedKeyword.channelId}&sortOrder=${sortOrder}&timestamp=${currentTimestamp}`
+        `/api/videos?keyword=${selectedKeyword.name}&query=${selectedKeyword.query}&channelId=${selectedKeyword.channelId}&sortOrder=${sortOrder}&timestamp=${currentTimestamp}&limit=1000`
       );
 
       const data: ApiResponse = await response.json();
