@@ -1343,18 +1343,13 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         })
       : null;
 
-    // ページネーションパラメータの取得
-    const page = context.query.page ? Number(context.query.page) : 1;
-    const limit = 20; // 1ページに表示する件数を20に固定
-    const skip = (page - 1) * limit;
-
     // MCの総数を取得（ページネーション用）
     const totalCount = await prisma.mC.count();
+    console.log(`総MC数: ${totalCount}件`);
 
-    // 必要なデータだけを選択的に取得
+    // すべてのMCを一度に取得
     const mcs = await prisma.mC.findMany({
-      take: limit,
-      skip: skip,
+      // take/skipを削除して全件取得
       select: {
         id: true,
         name: true,
@@ -1431,7 +1426,9 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 
     // 処理時間計測
     const processingTime = Date.now() - startTime;
-    console.log(`MC一覧データ取得処理時間: ${processingTime}ms`);
+    console.log(
+      `MC一覧データ取得処理時間: ${processingTime}ms, 件数: ${mcs.length}件`
+    );
 
     // 日付をISOString形式に変換
     const serializedMcs = mcs.map((mc) => ({
