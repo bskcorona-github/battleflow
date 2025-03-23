@@ -8,6 +8,10 @@ export interface UpdateItem {
 export const updateHistory: UpdateItem[] = [
   {
     date: "2025-03-23",
+    content: "MCランキングページに評価方法とベイズ推定についての説明を追加",
+  },
+  {
+    date: "2025-03-23",
     content:
       "MCランキング一覧の表示数制限を解除、全てのMCが表示されるように改善",
   },

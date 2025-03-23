@@ -16,6 +16,7 @@ import SearchBar from "@/components/SearchBar";
 import { GetServerSidePropsContext } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import RankingExplanation from "@/components/RankingExplanation";
 
 type Props = {
   mcs: (MCRank & {
@@ -390,6 +391,9 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
               </div>
             </div>
           </div>
+
+          {/* ランキング説明コンポーネント */}
+          <RankingExplanation />
 
           {currentMCs.length > 0 ? (
             <div className="grid grid-cols-1 gap-6">
