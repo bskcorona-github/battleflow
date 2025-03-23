@@ -595,7 +595,6 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 
     console.log("ランキングページのMC情報を取得中...");
     const rankings = await prisma.mCRank.findMany({
-      take: 100, // 表示数を上限100件に制限
       orderBy: {
         totalScore: "desc", // currentTotalPointsではなくtotalScoreを使用
       },
