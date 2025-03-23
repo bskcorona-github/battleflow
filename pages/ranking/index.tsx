@@ -406,7 +406,7 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
                       </span>
                       <div>
                         <Link
-                          href={`/mcs#${mc.name}`}
+                          href={`/mcs/${mc.id}`}
                           className="inline-flex items-center gap-1 hover:text-blue-600 transition-colors group"
                         >
                           <h2 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600">

@@ -8,6 +8,10 @@ export interface UpdateItem {
 export const updateHistory: UpdateItem[] = [
   {
     date: "2025-03-23",
+    content: "MCランキングページからMC詳細ページへの直接リンクを追加",
+  },
+  {
+    date: "2025-03-23",
     content: "MCランキングページに評価方法とベイズ推定についての説明を追加",
   },
   {
