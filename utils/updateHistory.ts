@@ -8,6 +8,11 @@ export interface UpdateItem {
 export const updateHistory: UpdateItem[] = [
   {
     date: "2025-03-23",
+    content:
+      "サイト全体のパフォーマンスを大幅に改善、ページ読み込み速度を最適化",
+  },
+  {
+    date: "2025-03-23",
     content: "MCランキングページからMC詳細ページへの直接リンクを追加",
   },
   {

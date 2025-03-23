@@ -598,33 +598,48 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     const startTime = Date.now();
 
     console.log("ランキングページのMC情報を取得中...");
+
+    // 必要なデータだけを選択して取得する
     const rankings = await prisma.mCRank.findMany({
       orderBy: {
-        totalScore: "desc", // currentTotalPointsではなくtotalScoreを使用
+        totalScore: "desc",
       },
-      include: {
-        mc: true, // MCモデルを含める
-        votes: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
+      select: {
+        id: true,
+        name: true,
+        totalScore: true,
+        rhymeScore: true,
+        vibesScore: true,
+        flowScore: true,
+        dialogueScore: true,
+        musicalityScore: true,
+        voteCount: true,
+        // 他の必要なデータだけを選択
+        votes: session
+          ? {
+              where: {
+                userId: session.user?.id,
               },
-            },
-          },
-        },
+              select: {
+                userId: true,
+              },
+            }
+          : false,
         comments: {
-          take: 2, // コメント表示数を最適化（2件に減らす）
+          take: 2,
           orderBy: { createdAt: "desc" },
-          include: {
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
+            mcRankId: true,
+            parentId: true,
             user: {
               select: {
                 id: true,
                 name: true,
-                email: true,
                 image: true,
               },
             },
@@ -640,23 +655,16 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     );
 
     // Prismaの日付をシリアライズ可能な形式に変換
-    const serializedRankings = JSON.parse(
-      JSON.stringify(
-        rankings.map((mcRank) => ({
-          ...mcRank,
-          comments: mcRank.comments.map((comment) => ({
-            ...comment,
-            createdAt: new Date(comment.createdAt).toISOString(),
-            updatedAt: new Date(comment.updatedAt).toISOString(),
-          })),
-          // セッションユーザーが投票済みかどうかをチェック
-          hasVoted: mcRank.votes.some(
-            (vote) => vote.userId === session?.user?.id
-          ),
-          voteCount: mcRank.voteCount,
-        }))
-      )
-    );
+    const serializedRankings = rankings.map((mcRank) => ({
+      ...mcRank,
+      comments: mcRank.comments.map((comment) => ({
+        ...comment,
+        createdAt: new Date(comment.createdAt).toISOString(),
+        updatedAt: new Date(comment.updatedAt).toISOString(),
+      })),
+      // セッションユーザーが投票済みかどうかをチェック
+      hasVoted: session ? mcRank.votes && mcRank.votes.length > 0 : false,
+    }));
 
     return {
       props: {

@@ -1330,56 +1330,61 @@ export default function MCsPage({ mcs: initialMcs }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
-  // パフォーマンス向上のためにキャッシュヘッダーを設定
-  // 10秒間キャッシュして、59秒間は古いキャッシュを再検証しながら使用
-  context.res.setHeader(
-    "Cache-Control",
-    "public, s-maxage=10, stale-while-revalidate=59"
-  );
-
   try {
-    // 並列でセッションとMCデータを取得するように最適化
-    const [session, totalCount] = await Promise.all([
-      getSession(context),
-      prisma.mC.count(),
-    ]);
+    // パフォーマンス計測開始
+    const startTime = Date.now();
 
-    // セッションがある場合のみユーザー情報を取得
-    let user = null;
-    if (session?.user?.email) {
-      user = await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: {
-          id: true,
-          isAdmin: true,
-        },
-      });
-    }
+    // セッション取得
+    const session = await getSession(context);
+    const user = session?.user?.email
+      ? await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { id: true, isAdmin: true },
+        })
+      : null;
 
-    // データベースクエリを最適化
+    // ページネーションパラメータの取得
+    const page = context.query.page ? Number(context.query.page) : 1;
+    const limit = 20; // 1ページに表示する件数を20に固定
+    const skip = (page - 1) * limit;
+
+    // MCの総数を取得（ページネーション用）
+    const totalCount = await prisma.mC.count();
+
+    // 必要なデータだけを選択的に取得
     const mcs = await prisma.mC.findMany({
+      take: limit,
+      skip: skip,
       select: {
         id: true,
         name: true,
         image: true,
         hood: true,
+        affiliation: true,
+        description: true,
         likesCount: true,
         commentsCount: true,
-        description: true,
-        affiliation: true,
         createdAt: true,
         updatedAt: true,
+        // ユーザーがログインしている場合のみいいね情報を取得
         likes:
           session && user?.id
             ? {
-                where: { userId: user.id },
-                select: { id: true },
+                where: {
+                  userId: user.id,
+                },
+                select: {
+                  id: true,
+                },
                 take: 1,
               }
             : false,
+        // 最新コメントのみ取得
         comments: {
-          orderBy: { createdAt: "desc" },
-          where: { parentId: null },
+          take: 2, // 最新2件のみ取得
+          orderBy: {
+            createdAt: "desc",
+          },
           select: {
             id: true,
             content: true,
@@ -1387,15 +1392,17 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
             updatedAt: true,
             userId: true,
             mcId: true,
+            parentId: true,
             user: {
               select: {
                 id: true,
                 name: true,
                 image: true,
-                email: true,
               },
             },
+            // 最新の返信のみ取得
             replies: {
+              take: 2,
               select: {
                 id: true,
                 content: true,
@@ -1409,7 +1416,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                     id: true,
                     name: true,
                     image: true,
-                    email: true,
                   },
                 },
               },
@@ -1423,56 +1429,28 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       orderBy: [{ likesCount: "desc" }, { commentsCount: "desc" }],
     });
 
-    // JSONシリアライズを効率化（余分なデータを除外）
-    const serializedMcs = mcs.map((mc) => {
-      // 必要なプロパティのみ抽出して新しいオブジェクトを作成
-      const serializedMC = {
-        id: mc.id,
-        name: mc.name,
-        image: mc.image,
-        hood: mc.hood,
-        affiliation: mc.affiliation,
-        description: mc.description,
-        likesCount: mc.likesCount,
-        commentsCount: mc.commentsCount,
-        isLikedByUser:
-          session && user?.id ? mc.likes && mc.likes.length > 0 : false,
-        createdAt: mc.createdAt.toISOString(),
-        updatedAt: mc.updatedAt.toISOString(),
-        comments: mc.comments.map((comment) => ({
-          id: comment.id,
-          content: comment.content,
-          createdAt: comment.createdAt.toISOString(),
-          updatedAt: comment.updatedAt.toISOString(),
-          userId: comment.userId,
-          mcId: comment.mcId,
-          parentId: null,
-          user: {
-            id: comment.user.id,
-            name: comment.user.name,
-            image: comment.user.image,
-            email: comment.user.email,
-          },
-          replies: comment.replies?.map((reply) => ({
-            id: reply.id,
-            content: reply.content,
-            createdAt: reply.createdAt.toISOString(),
-            updatedAt: reply.updatedAt.toISOString(),
-            userId: reply.userId,
-            mcId: reply.mcId,
-            parentId: reply.parentId,
-            user: {
-              id: reply.user.id,
-              name: reply.user.name,
-              image: reply.user.image,
-              email: reply.user.email,
-            },
-          })),
-        })),
-      };
+    // 処理時間計測
+    const processingTime = Date.now() - startTime;
+    console.log(`MC一覧データ取得処理時間: ${processingTime}ms`);
 
-      return serializedMC;
-    });
+    // 日付をISOString形式に変換
+    const serializedMcs = mcs.map((mc) => ({
+      ...mc,
+      isLikedByUser:
+        session && user?.id ? mc.likes && mc.likes.length > 0 : false,
+      createdAt: mc.createdAt.toISOString(),
+      updatedAt: mc.updatedAt.toISOString(),
+      comments: mc.comments.map((comment) => ({
+        ...comment,
+        createdAt: comment.createdAt.toISOString(),
+        updatedAt: comment.updatedAt.toISOString(),
+        replies: comment.replies?.map((reply) => ({
+          ...reply,
+          createdAt: reply.createdAt.toISOString(),
+          updatedAt: reply.updatedAt.toISOString(),
+        })),
+      })),
+    }));
 
     // セッション情報も最小限に
     const optimizedSession =

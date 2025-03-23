@@ -36,83 +36,63 @@ export default function App({
       return;
     }
 
-    // ページロードが完了してから記録する
-    const recordPageView = async () => {
-      try {
-        // ウィンドウのロードが完了したタイミングで実行
-        if (document.readyState === "complete") {
-          const response = await fetch("/api/pageviews", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              path: router.pathname || "/",
-            }),
-            // タイムアウトを設定
-            signal: AbortSignal.timeout(3000), // 3秒でタイムアウト
-          }).catch((err) => {
-            // フェッチ自体のエラーは静かに処理する（ユーザー体験に影響させない）
-            console.warn("Page view tracking failed:", err);
-            return null;
-          });
-
-          // レスポンスがnullの場合は既にエラー処理済み
-          if (!response) return;
-
-          if (!response.ok) {
-            console.warn(
-              "Failed to record page view:",
-              await response.text().catch(() => "Unknown error")
-            );
-          }
-        } else {
-          // ロード完了を待つ
-          window.addEventListener(
-            "load",
-            async () => {
-              try {
-                const response = await fetch("/api/pageviews", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    path: router.pathname || "/",
-                  }),
-                  // タイムアウトを設定
-                  signal: AbortSignal.timeout(3000), // 3秒でタイムアウト
-                }).catch((err) => {
-                  // フェッチ自体のエラーは静かに処理する
-                  console.warn("Page view tracking failed on load:", err);
-                  return null;
-                });
-
-                // レスポンスがnullの場合は既にエラー処理済み
-                if (!response) return;
-
-                if (!response.ok) {
-                  console.warn(
-                    "Failed to record page view on load:",
-                    await response.text().catch(() => "Unknown error")
-                  );
-                }
-              } catch (error) {
-                // クライアント側ではエラーを静かに処理する
-                console.warn("Error recording page view on load event:", error);
-              }
-            },
-            { once: true }
-          );
-        }
-      } catch (error) {
-        // クライアント側ではエラーを静かに処理する（ユーザー体験に影響させない）
-        console.warn("Error in recordPageView:", error);
+    // ページロードが完了してから記録する - 初期表示速度に影響しないように設計
+    const recordPageView = () => {
+      // 優先度の低いタスクとしてページビュー記録をキューに入れる
+      if (window.requestIdleCallback) {
+        window.requestIdleCallback(
+          () => {
+            sendPageViewRecord();
+          },
+          { timeout: 5000 }
+        ); // 5秒後には強制実行
+      } else {
+        // 非対応ブラウザ用フォールバック
+        setTimeout(sendPageViewRecord, 2000); // 2秒遅延
       }
     };
 
-    // メインコンテンツのレンダリング後に非同期で記録
-    setTimeout(recordPageView, 0);
+    // ページビュー記録を送信する関数
+    const sendPageViewRecord = () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3秒でタイムアウト
+
+      fetch("/api/pageviews", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          path: router.pathname || "/",
+        }),
+        signal: controller.signal,
+      })
+        .then((response) => {
+          clearTimeout(timeoutId);
+          if (!response.ok) {
+            console.warn("Failed to record page view:", response.status);
+          }
+        })
+        .catch((err) => {
+          if (err.name === "AbortError") {
+            console.warn("Page view recording timed out");
+          } else {
+            console.warn("Error recording page view:", err);
+          }
+        });
+    };
+
+    // DOMの読み込みが完了してから実行
+    if (document.readyState === "complete") {
+      recordPageView();
+    } else {
+      window.addEventListener("load", recordPageView, { once: true });
+    }
+
+    // クリーンアップ関数
+    return () => {
+      window.removeEventListener("load", recordPageView);
+    };
   }, [router.pathname]);
 
   return (
