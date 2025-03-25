@@ -17,6 +17,7 @@ import { GetServerSidePropsContext } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import RankingExplanation from "@/components/RankingExplanation";
+import { useRouter } from "next/router";
 
 type Props = {
   mcs: (MCRank & {
@@ -24,6 +25,13 @@ type Props = {
     voteCount: number;
     comments: CommentWithUser[];
   })[];
+  pagination: {
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  };
+  session: any;
 };
 
 type SortKey = "total" | "rhyme" | "vibes" | "flow" | "dialogue" | "musicality";
@@ -67,8 +75,8 @@ function getSortKeyLabel(key: SortKey): string {
   }
 }
 
-export default function RankingPage({ mcs: initialMcs }: Props) {
-  const { data: session } = useSession();
+export default function RankingPage({ mcs: initialMcs, pagination, session }: Props) {
+  const router = useRouter();
   const [mcs, setMcs] = useState(initialMcs);
   const [selectedMC, setSelectedMC] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("total");
@@ -76,12 +84,34 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
   const [isAddMCModalOpen, setIsAddMCModalOpen] = useState(false);
   const [expandedComments, setExpandedComments] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isVoteFormOpen, setIsVoteFormOpen] = useState(false);
+  const [currentMcId, setCurrentMcId] = useState<number | null>(null);
+  const [isExplanationOpen, setIsExplanationOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(pagination.page);
 
-  // ページネーション関連の状態
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10; // 1ページに10件表示
+  // ページ変更時の処理を追加
+  const handlePageChange = (page: number) => {
+    router.push({
+      pathname: router.pathname,
+      query: { ...router.query, page: page.toString() }
+    });
+  };
 
-  // 検索クエリに基づいてMCをフィルタリングするためのmemo
+  // 現在のページが変わったら自動的にURLも更新
+  useEffect(() => {
+    if (currentPage !== pagination.page) {
+      handlePageChange(currentPage);
+    }
+  }, [currentPage]);
+
+  // URLのページ番号が変わったら、ステートを更新
+  useEffect(() => {
+    if (pagination.page !== currentPage) {
+      setCurrentPage(pagination.page);
+    }
+  }, [pagination.page]);
+
+  // 検索クエリに基づいてMCをフィルタリングするためのuseMemo
   const filteredMCs = useMemo(() => {
     if (!searchQuery.trim()) return mcs;
 
@@ -95,35 +125,27 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
     return [...filteredMCs].sort((a, b) => b[scoreKey] - a[scoreKey]);
   }, [filteredMCs, sortKey]);
 
-  // 現在のページに表示するMCを計算
-  const currentMCs = useMemo(() => {
-    const indexOfLastMC = currentPage * itemsPerPage;
-    const indexOfFirstMC = indexOfLastMC - itemsPerPage;
-    return sortedMCs.slice(indexOfFirstMC, indexOfLastMC);
-  }, [sortedMCs, currentPage, itemsPerPage]);
-
-  // 総ページ数を計算
-  const totalPages = useMemo(
-    () => Math.ceil(sortedMCs.length / itemsPerPage),
-    [sortedMCs.length, itemsPerPage]
-  );
-
-  // ページ変更のハンドラー
-  const handlePageChange = (pageNumber: number) => {
-    setCurrentPage(pageNumber);
-    // ページが変わったらページトップにスクロール
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
   // 検索時にページを1に戻す
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  // 検索ハンドラー
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-  };
+  // 検索結果をクライアントサイドでページネーション
+  const currentMCs = useMemo(() => {
+    if (searchQuery) {
+      const indexOfFirstItem = (currentPage - 1) * pagination.pageSize;
+      const indexOfLastItem = indexOfFirstItem + pagination.pageSize;
+      return sortedMCs.slice(indexOfFirstItem, indexOfLastItem);
+    }
+    return sortedMCs;
+  }, [sortedMCs, currentPage, searchQuery, pagination.pageSize]);
+
+  // 総ページ数（検索時はクライアントサイドで計算）
+  const totalPages = useMemo(() => {
+    return searchQuery
+      ? Math.ceil(sortedMCs.length / pagination.pageSize)
+      : pagination.totalPages;
+  }, [sortedMCs.length, searchQuery, pagination.pageSize, pagination.totalPages]);
 
   const handleVote = async (
     mcId: number,
@@ -349,7 +371,7 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
             <div className="flex flex-col md:flex-row gap-3 md:items-center">
               <SearchBar
                 placeholder="MC名で検索..."
-                onSearch={handleSearch}
+                onSearch={setSearchQuery}
                 className="w-full md:w-64"
               />
               <div className="flex flex-wrap gap-2">
@@ -402,7 +424,7 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <span className="text-xl font-bold text-gray-800">
-                        {(currentPage - 1) * itemsPerPage + index + 1}
+                        {(currentPage - 1) * pagination.pageSize + index + 1}
                       </span>
                       <div>
                         <Link
@@ -548,12 +570,14 @@ export default function RankingPage({ mcs: initialMcs }: Props) {
           )}
         </div>
 
-        {/* ページネーションコンポーネント */}
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
+        {/* ページネーション */}
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        )}
 
         {/* MC追加モーダル */}
         <Modal
@@ -599,11 +623,20 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 
     console.log("ランキングページのMC情報を取得中...");
 
+    // ページネーション用のパラメータ
+    const page = parseInt(context.query.page as string) || 1;
+    const pageSize = 20; // 1ページあたりの表示件数
+
+    // 総件数を取得
+    const totalCount = await prisma.mCRank.count();
+
     // 必要なデータだけを選択して取得する
     const rankings = await prisma.mCRank.findMany({
       orderBy: {
         totalScore: "desc",
       },
+      take: pageSize,
+      skip: (page - 1) * pageSize,
       select: {
         id: true,
         name: true,
@@ -614,36 +647,23 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
         dialogueScore: true,
         musicalityScore: true,
         voteCount: true,
-        // 他の必要なデータだけを選択
-        votes: session
+        // ユーザーが投票済みかどうかのみを確認
+        votes: session && session.user?.id
           ? {
               where: {
-                userId: session.user?.id,
+                userId: session.user.id,
               },
               select: {
                 userId: true,
               },
+              take: 1, // 1件あれば十分
             }
           : false,
-        comments: {
-          take: 2,
-          orderBy: { createdAt: "desc" },
+        // コメント数のみを取得
+        _count: {
           select: {
-            id: true,
-            content: true,
-            createdAt: true,
-            updatedAt: true,
-            userId: true,
-            mcRankId: true,
-            parentId: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-              },
-            },
-          },
+            comments: true
+          }
         },
       },
     });
@@ -657,19 +677,23 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     // Prismaの日付をシリアライズ可能な形式に変換
     const serializedRankings = rankings.map((mcRank) => ({
       ...mcRank,
-      comments: mcRank.comments.map((comment) => ({
-        ...comment,
-        createdAt: new Date(comment.createdAt).toISOString(),
-        updatedAt: new Date(comment.updatedAt).toISOString(),
-      })),
+      // コメントは最初は取得しない（必要時に別APIで取得）
+      comments: [],
+      commentsCount: mcRank._count?.comments || 0,
       // セッションユーザーが投票済みかどうかをチェック
-      hasVoted: session ? mcRank.votes && mcRank.votes.length > 0 : false,
+      hasVoted: session && session.user?.id ? mcRank.votes && mcRank.votes.length > 0 : false,
     }));
 
     return {
       props: {
         session,
         mcs: serializedRankings,
+        pagination: {
+          total: totalCount,
+          page,
+          pageSize,
+          totalPages: Math.ceil(totalCount / pageSize)
+        }
       },
     };
   } catch (error) {
@@ -678,6 +702,12 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       props: {
         session,
         mcs: [],
+        pagination: {
+          total: 0,
+          page: 1,
+          pageSize: 20,
+          totalPages: 0
+        },
         error: "MCデータの取得に失敗しました",
       },
     };
