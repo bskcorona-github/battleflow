@@ -12,7 +12,6 @@ import Pagination from "@/components/Pagination";
 import Head from "next/head";
 import SearchBar from "@/components/SearchBar";
 import Link from "next/link";
-import { useRouter } from 'next/router';
 
 type Props = {
   mcs: MCWithLikesAndComments[];
@@ -25,9 +24,6 @@ type Props = {
       id: string | null;
     } | null;
   } | null;
-  totalCount: number;
-  currentPage: number;
-  pageSize: number;
 };
 
 // MCViewerコンポーネントを作成
@@ -755,39 +751,17 @@ const MCViewer = ({
   );
 };
 
-export default function MCsPage({ mcs: initialMcs, totalCount, currentPage: initialPage, pageSize }: Props) {
-  const router = useRouter();
+export default function MCsPage({ mcs: initialMcs }: Props) {
   const [mcs, setMcs] = useState<MCWithLikesAndComments[]>(initialMcs);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [expandedComments, setExpandedComments] = useState<number[]>([]);
   const { data: sessionData } = useSession();
-  const [currentPage, setCurrentPage] = useState(initialPage);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
   const [searchQuery, setSearchQuery] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   // いいね処理の連打防止用の状態
   const [likingMcIds, setLikingMcIds] = useState<Set<number>>(new Set());
-
-  // ページ変更時の処理を追加
-  const handlePageChange = (page: number) => {
-    router.push({
-      pathname: router.pathname,
-      query: { ...router.query, page: page.toString() }
-    });
-  };
-
-  // 現在のページが変わったら自動的にURLも更新
-  useEffect(() => {
-    if (currentPage !== initialPage) {
-      handlePageChange(currentPage);
-    }
-  }, [currentPage]);
-
-  // URLのページ番号が変わったら、ステートを更新
-  useEffect(() => {
-    if (initialPage !== currentPage) {
-      setCurrentPage(initialPage);
-    }
-  }, [initialPage]);
 
   // MCViewerコンポーネントをレンダリングする関数
   const renderMCViewer = (mc: MCWithLikesAndComments) => {
@@ -822,20 +796,17 @@ export default function MCsPage({ mcs: initialMcs, totalCount, currentPage: init
     );
   }, [mcs, searchQuery]);
 
-  // クライアントサイドフィルタリングの場合のみ使用
+  // 現在のページのMCs
   const currentMCs = useMemo(() => {
-    if (searchQuery) {
-      const indexOfLastMC = currentPage * pageSize;
-      const indexOfFirstMC = indexOfLastMC - pageSize;
-      return filteredMCs.slice(indexOfFirstMC, indexOfLastMC);
-    }
-    return filteredMCs; // 検索時以外はサーバーからのデータをそのまま使用
-  }, [filteredMCs, currentPage, searchQuery, pageSize]);
+    const indexOfLastMC = currentPage * itemsPerPage;
+    const indexOfFirstMC = indexOfLastMC - itemsPerPage;
+    return filteredMCs.slice(indexOfFirstMC, indexOfLastMC);
+  }, [filteredMCs, currentPage]);
 
-  // ページ数の計算を更新（検索時はクライアントサイドで計算、それ以外はサーバーからの総数を使用）
+  // ページ数の計算を更新
   const totalPages = useMemo(
-    () => Math.ceil(searchQuery ? filteredMCs.length : totalCount / pageSize),
-    [filteredMCs.length, searchQuery, totalCount, pageSize]
+    () => Math.ceil(filteredMCs.length / itemsPerPage),
+    [filteredMCs.length, itemsPerPage]
   );
 
   // 検索時にページを1に戻す
@@ -1350,7 +1321,7 @@ export default function MCsPage({ mcs: initialMcs, totalCount, currentPage: init
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
-            onPageChange={handlePageChange}
+            onPageChange={setCurrentPage}
           />
         )}
       </div>
@@ -1362,10 +1333,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   try {
     // パフォーマンス計測開始
     const startTime = Date.now();
-
-    // ページネーションのためのパラメータ取得
-    const page = parseInt(context.query.page as string) || 1;
-    const pageSize = 20; // 1ページあたりの表示件数
 
     // セッション取得
     const session = await getSession(context);
@@ -1380,10 +1347,9 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     const totalCount = await prisma.mC.count();
     console.log(`総MC数: ${totalCount}件`);
 
-    // MCを取得（ページネーション対応・最低限のデータのみ）
+    // すべてのMCを一度に取得
     const mcs = await prisma.mC.findMany({
-      take: pageSize,
-      skip: (page - 1) * pageSize,
+      // take/skipを削除して全件取得
       select: {
         id: true,
         name: true,
@@ -1408,8 +1374,52 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                 take: 1,
               }
             : false,
-        // 初期表示ではコメント情報は取得しない
-        // コメント情報は必要に応じて別のAPIで取得する
+        // 最新コメントのみ取得
+        comments: {
+          take: 2, // 最新2件のみ取得
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
+            mcId: true,
+            parentId: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+            // 最新の返信のみ取得
+            replies: {
+              take: 2,
+              select: {
+                id: true,
+                content: true,
+                createdAt: true,
+                updatedAt: true,
+                userId: true,
+                mcId: true,
+                parentId: true,
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true,
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: "asc",
+              },
+            },
+          },
+        },
       },
       orderBy: [{ likesCount: "desc" }, { commentsCount: "desc" }],
     });
@@ -1427,8 +1437,16 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         session && user?.id ? mc.likes && mc.likes.length > 0 : false,
       createdAt: mc.createdAt.toISOString(),
       updatedAt: mc.updatedAt.toISOString(),
-      // 初期表示では空の配列として返す
-      comments: [],
+      comments: mc.comments.map((comment) => ({
+        ...comment,
+        createdAt: comment.createdAt.toISOString(),
+        updatedAt: comment.updatedAt.toISOString(),
+        replies: comment.replies?.map((reply) => ({
+          ...reply,
+          createdAt: reply.createdAt.toISOString(),
+          updatedAt: reply.updatedAt.toISOString(),
+        })),
+      })),
     }));
 
     // セッション情報も最小限に
@@ -1450,8 +1468,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       props: {
         mcs: serializedMcs,
         totalCount,
-        currentPage: page,
-        pageSize,
         session: optimizedSession,
       },
     };
@@ -1461,8 +1477,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       props: {
         mcs: [],
         totalCount: 0,
-        currentPage: 1,
-        pageSize: 20,
         session: null,
         error: "データの取得に失敗しました",
       },
