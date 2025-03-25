@@ -599,20 +599,11 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 
     console.log("ランキングページのMC情報を取得中...");
 
-    // ページネーション用のパラメータ
-    const page = parseInt(context.query.page as string) || 1;
-    const pageSize = 20; // 1ページあたりの表示件数
-
-    // 総件数を取得
-    const totalCount = await prisma.mCRank.count();
-
     // 必要なデータだけを選択して取得する
     const rankings = await prisma.mCRank.findMany({
       orderBy: {
         totalScore: "desc",
       },
-      take: pageSize,
-      skip: (page - 1) * pageSize,
       select: {
         id: true,
         name: true,
@@ -623,23 +614,36 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
         dialogueScore: true,
         musicalityScore: true,
         voteCount: true,
-        // ユーザーが投票済みかどうかのみを確認
-        votes: session && session.user?.id
+        // 他の必要なデータだけを選択
+        votes: session
           ? {
               where: {
-                userId: session.user.id,
+                userId: session.user?.id,
               },
               select: {
                 userId: true,
               },
-              take: 1, // 1件あれば十分
             }
           : false,
-        // コメント数のみを取得
-        _count: {
+        comments: {
+          take: 2,
+          orderBy: { createdAt: "desc" },
           select: {
-            comments: true
-          }
+            id: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
+            mcRankId: true,
+            parentId: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
         },
       },
     });
@@ -653,23 +657,19 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     // Prismaの日付をシリアライズ可能な形式に変換
     const serializedRankings = rankings.map((mcRank) => ({
       ...mcRank,
-      // コメントは最初は取得しない（必要時に別APIで取得）
-      comments: [],
-      commentsCount: mcRank._count?.comments || 0,
+      comments: mcRank.comments.map((comment) => ({
+        ...comment,
+        createdAt: new Date(comment.createdAt).toISOString(),
+        updatedAt: new Date(comment.updatedAt).toISOString(),
+      })),
       // セッションユーザーが投票済みかどうかをチェック
-      hasVoted: session && session.user?.id ? mcRank.votes && mcRank.votes.length > 0 : false,
+      hasVoted: session ? mcRank.votes && mcRank.votes.length > 0 : false,
     }));
 
     return {
       props: {
         session,
         mcs: serializedRankings,
-        pagination: {
-          total: totalCount,
-          page,
-          pageSize,
-          totalPages: Math.ceil(totalCount / pageSize)
-        }
       },
     };
   } catch (error) {
@@ -678,12 +678,6 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       props: {
         session,
         mcs: [],
-        pagination: {
-          total: 0,
-          page: 1,
-          pageSize: 20,
-          totalPages: 0
-        },
         error: "MCデータの取得に失敗しました",
       },
     };

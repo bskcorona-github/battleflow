@@ -22,9 +22,6 @@ export default async function handler(
   }
 
   try {
-    // パフォーマンス計測開始
-    const startTime = Date.now();
-
     // 親コメントの存在確認とmcIdの取得
     const parentComment = await prisma.mCComment.findUnique({
       where: { id: commentId },
@@ -40,7 +37,7 @@ export default async function handler(
       return res.status(400).json({ error: "返信内容は必須です" });
     }
 
-    // 返信を作成 - includeの代わりにselectを使用
+    // 返信を作成
     const reply = await prisma.mCComment.create({
       data: {
         content: content.trim(),
@@ -48,27 +45,16 @@ export default async function handler(
         mcId: parentComment.mcId,
         parentId: commentId,
       },
-      select: {
-        id: true,
-        content: true,
-        createdAt: true,
-        updatedAt: true,
-        userId: true,
-        mcId: true,
-        parentId: true,
+      include: {
         user: {
           select: {
             name: true,
             image: true,
-            // emailは必要ない
+            email: true,
           },
         },
       },
     });
-
-    // 処理時間計測
-    const processingTime = Date.now() - startTime;
-    console.log(`返信作成処理時間: ${processingTime}ms`);
 
     // レスポンスデータを整形
     const responseData = {
@@ -82,7 +68,9 @@ export default async function handler(
       user: {
         name: reply.user.name,
         image: reply.user.image,
+        email: reply.user.email,
       },
+      replies: [],
     };
 
     return res.status(200).json(responseData);
