@@ -1334,6 +1334,10 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     // パフォーマンス計測開始
     const startTime = Date.now();
 
+    // ページネーションのためのパラメータ取得
+    const page = parseInt(context.query.page as string) || 1;
+    const pageSize = 20; // 1ページあたりの表示件数
+
     // セッション取得
     const session = await getSession(context);
     const user = session?.user?.email
@@ -1347,9 +1351,10 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     const totalCount = await prisma.mC.count();
     console.log(`総MC数: ${totalCount}件`);
 
-    // すべてのMCを一度に取得
+    // MCを取得（ページネーション対応・最低限のデータのみ）
     const mcs = await prisma.mC.findMany({
-      // take/skipを削除して全件取得
+      take: pageSize,
+      skip: (page - 1) * pageSize,
       select: {
         id: true,
         name: true,
@@ -1374,52 +1379,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                 take: 1,
               }
             : false,
-        // 最新コメントのみ取得
-        comments: {
-          take: 2, // 最新2件のみ取得
-          orderBy: {
-            createdAt: "desc",
-          },
-          select: {
-            id: true,
-            content: true,
-            createdAt: true,
-            updatedAt: true,
-            userId: true,
-            mcId: true,
-            parentId: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-              },
-            },
-            // 最新の返信のみ取得
-            replies: {
-              take: 2,
-              select: {
-                id: true,
-                content: true,
-                createdAt: true,
-                updatedAt: true,
-                userId: true,
-                mcId: true,
-                parentId: true,
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    image: true,
-                  },
-                },
-              },
-              orderBy: {
-                createdAt: "asc",
-              },
-            },
-          },
-        },
+        // 初期表示ではコメント情報は取得しない
+        // コメント情報は必要に応じて別のAPIで取得する
       },
       orderBy: [{ likesCount: "desc" }, { commentsCount: "desc" }],
     });
@@ -1437,16 +1398,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         session && user?.id ? mc.likes && mc.likes.length > 0 : false,
       createdAt: mc.createdAt.toISOString(),
       updatedAt: mc.updatedAt.toISOString(),
-      comments: mc.comments.map((comment) => ({
-        ...comment,
-        createdAt: comment.createdAt.toISOString(),
-        updatedAt: comment.updatedAt.toISOString(),
-        replies: comment.replies?.map((reply) => ({
-          ...reply,
-          createdAt: reply.createdAt.toISOString(),
-          updatedAt: reply.updatedAt.toISOString(),
-        })),
-      })),
+      // 初期表示では空の配列として返す
+      comments: [],
     }));
 
     // セッション情報も最小限に
@@ -1468,6 +1421,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       props: {
         mcs: serializedMcs,
         totalCount,
+        currentPage: page,
+        pageSize,
         session: optimizedSession,
       },
     };
@@ -1477,6 +1432,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       props: {
         mcs: [],
         totalCount: 0,
+        currentPage: 1,
+        pageSize: 20,
         session: null,
         error: "データの取得に失敗しました",
       },

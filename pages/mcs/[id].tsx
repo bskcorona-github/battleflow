@@ -345,6 +345,9 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getSession(context);
 
   try {
+    // パフォーマンス計測開始
+    const startTime = Date.now();
+
     let user = null;
     if (session?.user?.email) {
       user = await prisma.user.findUnique({
@@ -363,6 +366,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         hood: true,
         affiliation: true,
         likesCount: true,
+        commentsCount: true, // コメント総数
         likes: user
           ? {
               where: { userId: user.id },
@@ -370,7 +374,9 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
               take: 1,
             }
           : undefined,
+        // 初期表示では最新のコメントのみ取得（最大5件）
         comments: {
+          take: 5,
           orderBy: { createdAt: "desc" },
           select: {
             id: true,
@@ -383,7 +389,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
                 id: true,
                 name: true,
                 image: true,
-                email: true,
+                // emailは不要
               },
             },
           },
@@ -396,6 +402,10 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         notFound: true,
       };
     }
+
+    // 処理時間計測
+    const processingTime = Date.now() - startTime;
+    console.log(`MC詳細ページデータ取得時間: ${processingTime}ms`);
 
     const optimizedSession = session
       ? {
@@ -415,6 +425,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       hood: mc.hood,
       affiliation: mc.affiliation,
       likesCount: mc.likesCount,
+      commentsCount: mc.commentsCount || 0,
       likes: null,
       isLikedByUser: user ? mc.likes && mc.likes.length > 0 : false,
       comments: mc.comments.map((comment) => ({
@@ -422,6 +433,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         createdAt: comment.createdAt.toISOString(),
         updatedAt: comment.updatedAt.toISOString(),
       })),
+      // コメントが5件以上ある場合は、残りはAPIで取得
+      hasMoreComments: (mc.commentsCount || 0) > 5,
     };
 
     return {
