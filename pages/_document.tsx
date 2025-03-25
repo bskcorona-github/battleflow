@@ -30,7 +30,7 @@ export default function Document() {
         />
       </Head>
       <body className="antialiased">
-        {/* ダークモードフラッシュ防止のためのスクリプト */}
+        {/* ダークモードフラッシュ防止のためのスクリプト（改良版） */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -43,7 +43,21 @@ export default function Document() {
                 }
                 
                 const theme = getThemePreference();
-                document.documentElement.classList.toggle('dark', theme === 'dark');
+                
+                // Explicitly set the theme class on HTML element
+                if (theme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                  document.documentElement.classList.remove('light');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                  document.documentElement.classList.add('light');
+                }
+                
+                // Set as a data attribute for additional CSS targeting
+                document.documentElement.setAttribute('data-theme', theme);
+                
+                // Prevent transition flashes
+                document.documentElement.style.colorScheme = theme;
               })();
             `,
           }}

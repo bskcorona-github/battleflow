@@ -38,5 +38,5 @@ export default {
     },
   },
   plugins: [],
-  darkMode: "class", // or 'media' to respect system preferences
+  darkMode: "class", // クラスベースのダークモード（手動切り替え用）
 } satisfies Config;
