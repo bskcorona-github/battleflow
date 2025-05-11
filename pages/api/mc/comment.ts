@@ -28,18 +28,24 @@ export default async function handler(
       userId: session.user.id,
     });
 
-    if (!mcId || !content?.trim()) {
-      console.log("Invalid request data:", { mcId, content });
+    const mcIdAsInt = parseInt(mcId);
+    if (isNaN(mcIdAsInt)) {
+      console.log("Invalid MC ID format:", mcId);
+      return res.status(400).json({ error: "MC ID must be a number" });
+    }
+
+    if (!mcIdAsInt || !content?.trim()) {
+      console.log("Invalid request data:", { mcId: mcIdAsInt, content });
       return res.status(400).json({ error: "MC ID and content are required" });
     }
 
     // MCの存在確認
     const mc = await prisma.mC.findUnique({
-      where: { id: parseInt(mcId) },
+      where: { id: mcIdAsInt },
     });
 
     if (!mc) {
-      console.log("MC not found:", mcId);
+      console.log("MC not found:", mcIdAsInt);
       return res.status(404).json({ error: "MC not found" });
     }
 
@@ -48,7 +54,7 @@ export default async function handler(
         data: {
           content: content.trim(),
           userId: session.user.id,
-          mcId: parseInt(mcId),
+          mcId: mcIdAsInt,
         },
         include: {
           user: {

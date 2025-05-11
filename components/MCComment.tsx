@@ -37,7 +37,7 @@ export default function MCComment({
     setIsSubmitting(true);
     try {
       const endpoint =
-        type === "mc" ? "/api/mcs/comment" : "/api/ranking/comment";
+        type === "mc" ? "/api/mc/comment" : "/api/ranking/comment";
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,7 +66,7 @@ export default function MCComment({
 
     try {
       const endpoint =
-        type === "mc" ? "/api/mcs/comment" : "/api/ranking/comment";
+        type === "mc" ? "/api/mc/comment" : "/api/ranking/comment";
       const response = await fetch(`${endpoint}/${commentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -93,7 +93,7 @@ export default function MCComment({
 
     try {
       const endpoint =
-        type === "mc" ? "/api/mcs/comment" : "/api/ranking/comment";
+        type === "mc" ? "/api/mc/comment" : "/api/ranking/comment";
       const response = await fetch(`${endpoint}/${commentId}`, {
         method: "DELETE",
       });

@@ -2,8 +2,15 @@ import Head from "next/head";
 import Link from "next/link";
 import UpdateHistory from "../components/UpdateHistory";
 import { updateHistory } from "../utils/updateHistory";
+import SearchBar from "../components/SearchBar";
 
 export default function Home() {
+  // ダミーの onSearch 関数
+  const handleSearch = (query: string) => {
+    console.log("Search query:", query);
+    // ここに実際の検索処理を実装する (例: /search?q=query へ遷移)
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-slate-900">
       <Head>
@@ -38,6 +45,14 @@ export default function Home() {
               <br className="hidden md:inline" />
               すべてのMCバトル情報を一つのプラットフォームで
             </p>
+
+            {/* 検索バーをここに追加 */}
+            <div className="mb-8 max-w-xl mx-auto">
+              <SearchBar
+                onSearch={handleSearch}
+                placeholder="MCの名前やキーワードで検索"
+              />
+            </div>
 
             <div className="flex flex-wrap justify-center gap-4 md:gap-6">
               <Link

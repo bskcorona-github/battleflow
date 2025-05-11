@@ -832,7 +832,7 @@ export default function MCsPage({ mcs: initialMcs }: Props) {
     }
 
     try {
-      const response = await fetch("/api/mcs/comment", {
+      const response = await fetch("/api/mc/comment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1029,12 +1029,12 @@ export default function MCsPage({ mcs: initialMcs }: Props) {
     replyToUser?: string
   ) => {
     try {
-      const response = await fetch(`/api/mcs/comment/${commentId}/reply`, {
+      const response = await fetch(`/api/mc/reply`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content, replyToUser }),
+        body: JSON.stringify({ content, commentId, replyToUser }),
       });
 
       if (!response.ok) {

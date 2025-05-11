@@ -76,7 +76,7 @@ export default function MCDetail({ mc, session }: Props) {
     }
 
     try {
-      const response = await fetch(`/api/mcs/comment`, {
+      const response = await fetch(`/api/mc/comment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
