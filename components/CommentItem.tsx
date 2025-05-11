@@ -43,7 +43,7 @@ export default function CommentItem({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
+      <div className="flex items-start gap-3 p-3 bg-white rounded-lg shadow-sm">
         {comment.user.image && (
           <div className="relative w-8 h-8">
             <Image
