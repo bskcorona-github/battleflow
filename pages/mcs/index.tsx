@@ -293,7 +293,7 @@ const MCViewer = ({
                       <textarea
                         name="content"
                         placeholder="コメントを入力..."
-                        className="w-full p-2 border rounded-md text-black font-medium"
+                        className="w-full p-2 border rounded-md text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-700 border-gray-300 dark:border-gray-600 font-medium"
                         rows={3}
                       />
                       <button
@@ -382,7 +382,7 @@ const MCViewer = ({
                             <textarea
                               value={editContent}
                               onChange={(e) => setEditContent(e.target.value)}
-                              className="w-full p-2 border rounded-md text-black font-medium"
+                              className="w-full p-2 border rounded-md text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-700 border-gray-300 dark:border-gray-600 font-medium"
                               rows={3}
                             />
                             <div className="flex gap-2 justify-end">
@@ -610,7 +610,7 @@ const MCViewer = ({
                 <textarea
                   name="content"
                   placeholder="コメントを入力..."
-                  className="w-full p-2 border rounded-md text-black font-medium"
+                  className="w-full p-2 border rounded-md text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-700 border-gray-300 dark:border-gray-600 font-medium"
                   rows={3}
                 />
                 <button
@@ -697,7 +697,7 @@ const MCViewer = ({
                       <textarea
                         value={editContent}
                         onChange={(e) => setEditContent(e.target.value)}
-                        className="w-full p-2 border rounded-md text-black font-medium"
+                        className="w-full p-2 border rounded-md text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-700 border-gray-300 dark:border-gray-600 font-medium"
                         rows={3}
                       />
                       <div className="flex gap-2 justify-end">
@@ -749,6 +749,31 @@ const MCViewer = ({
       )}
     </div>
   );
+};
+
+// 再帰的にコメントに返信を追加するヘルパー関数
+const addReplyToComment = (
+  comments: CommentWithUser[],
+  targetCommentId: number,
+  newReply: CommentWithUser
+): CommentWithUser[] => {
+  return comments.map((comment) => {
+    if (comment.id === targetCommentId) {
+      // 既存のrepliesがない場合は空配列として初期化
+      const existingReplies = comment.replies || [];
+      return {
+        ...comment,
+        replies: [...existingReplies, newReply],
+      };
+    }
+    if (comment.replies && comment.replies.length > 0) {
+      return {
+        ...comment,
+        replies: addReplyToComment(comment.replies, targetCommentId, newReply),
+      };
+    }
+    return comment;
+  });
 };
 
 export default function MCsPage({ mcs: initialMcs }: Props) {
@@ -1041,20 +1066,26 @@ export default function MCsPage({ mcs: initialMcs }: Props) {
         throw new Error("返信の投稿に失敗しました");
       }
 
-      const newReply = await response.json();
+      const newReplyData = await response.json();
+
+      // APIからのレスポンスをCommentWithUser型に合わせる (user情報と空のreplies配列を付与)
+      const newReplyComment: CommentWithUser = {
+        ...newReplyData,
+        user: newReplyData.user ||
+          sessionData?.user || {
+            name: "不明なユーザー",
+            image: null,
+            id: "",
+            email: null,
+          }, // ユーザー情報を保証
+        replies: [], // 新しい返信にはさらに返信は無いため空配列
+      };
 
       // MCsの状態を更新
       setMcs((prevMcs) =>
         prevMcs.map((mc) => ({
           ...mc,
-          comments: mc.comments.map((comment) =>
-            comment.id === commentId
-              ? {
-                  ...comment,
-                  replies: [...(comment.replies || []), newReply],
-                }
-              : comment
-          ),
+          comments: addReplyToComment(mc.comments, commentId, newReplyComment),
         }))
       );
 
