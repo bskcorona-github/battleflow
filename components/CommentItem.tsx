@@ -43,7 +43,7 @@ export default function CommentItem({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-3 p-3 bg-white rounded-lg shadow-sm">
+      <div className="flex items-start gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
         {comment.user.image && (
           <div className="relative w-8 h-8">
             <Image
@@ -110,7 +110,7 @@ export default function CommentItem({
               value={replyContent}
               onChange={(e) => setReplyContent(e.target.value)}
               placeholder="返信を入力..."
-              className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+              className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-700 dark:border-gray-600"
             />
             <button
               type="submit"
